@@ -32,6 +32,11 @@ MVP 개발 중. 진행 상황은 [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.
 cp .env.example .env
 ```
 
+## 개발 환경 메모
+
+- Python 작업은 Linux 또는 WSL2에서 한다. Windows에서 **스마트 앱 컨트롤**이 켜져 있으면 numpy 등 서명 없는 DLL이 차단되어 import가 실패한다 (D-013).
+- 패키지별 테스트 예: `cd packages/mesh-ready-check && pip install -e ".[dev]" && pytest`
+
 ## 기여 규칙
 
 - 사용자 이미지, 생성물, 모델 가중치, `.env`는 커밋하지 않는다. CI가 `scripts/check_forbidden_files.sh`로 검사한다.

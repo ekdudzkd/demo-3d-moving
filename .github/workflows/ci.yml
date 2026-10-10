@@ -16,6 +16,21 @@ jobs:
       - name: 금지 파일 검사
         run: bash scripts/check_forbidden_files.sh
 
+  mesh-ready-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/mesh-ready-check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest -q
+
   # backend (Ruff + pytest): 1-10에서 추가
   # frontend (typecheck + build + test): 2-7에서 추가
   # CI에서는 대형 모델을 다운로드하지 않는다. GENERATOR=mock, SEGMENTER=grabcut 고정.
