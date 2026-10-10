@@ -24,13 +24,24 @@ MVP 개발 중. 진행 상황은 [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.
 | [docs/licenses.md](docs/licenses.md) | 사용 모델·라이브러리 라이선스 |
 | [docs/experiments.md](docs/experiments.md) | 실험 기록 |
 
-## 빠른 시작
+## 빠른 시작 (백엔드)
 
-백엔드(1단계)·프론트엔드(2단계) 구현 후 채운다.
+Linux 또는 WSL2, Python 3.12.
 
 ```bash
 cp .env.example .env
+python -m venv .venv && . .venv/bin/activate
+pip install -e packages/mesh-ready-check -e "backend[dev]"
+
+cd backend
+uvicorn app.main:create_app --factory --port 8000   # API 서버
+python -m app.worker                                 # 다른 터미널: 생성 워커
 ```
+
+- API 문서: http://localhost:8000/docs
+- 테스트: `cd backend && pytest`
+- 전체 흐름 스모크: `PY=python bash scripts/smoke_stage1.sh`
+- 기본값은 `GENERATOR=mock`(실루엣 돌출, AI 아님), `SEGMENTER=grabcut`. 실제 모델은 3단계.
 
 ## 개발 환경 메모
 

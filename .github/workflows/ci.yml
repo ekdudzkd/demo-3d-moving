@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# CI에서는 대형 모델을 다운로드하지 않는다. GENERATOR=mock, SEGMENTER=grabcut 고정.
+env:
+  GENERATOR: mock
+  SEGMENTER: grabcut
+
 jobs:
   repo-hygiene:
     runs-on: ubuntu-latest
@@ -31,6 +36,21 @@ jobs:
       - run: ruff format --check .
       - run: pytest -q
 
-  # backend (Ruff + pytest): 1-10에서 추가
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e packages/mesh-ready-check -e "backend[dev]"
+      - name: Ruff
+        working-directory: backend
+        run: ruff check . && ruff format --check .
+      - name: pytest (API 응답·작업 상태 스키마 포함)
+        working-directory: backend
+        run: pytest -q
+      - name: 1단계 스모크 (서버+워커 실제 기동)
+        run: PY=python bash scripts/smoke_stage1.sh
+
   # frontend (typecheck + build + test): 2-7에서 추가
-  # CI에서는 대형 모델을 다운로드하지 않는다. GENERATOR=mock, SEGMENTER=grabcut 고정.

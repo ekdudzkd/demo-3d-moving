@@ -19,8 +19,11 @@
 - 모델 호출은 `ImageTo3DAdapter`, 분할은 `Segmenter` 인터페이스로만. (D-006)
 - 품질 판정은 서버, 표시는 클라이언트.
 
-## 미정 (구현 중 채움)
+## 구현 메모
 
-- 워커 job claim 쿼리와 동시성 보장 방식 — 1-8
-- SSE 재연결 시 이벤트 재전송 방식 — 1-8
-- 파일 서빙 경로 검증 — 1-3/1-4
+- **job claim**: 가장 오래된 QUEUED id를 고른 뒤 `UPDATE ... WHERE id=? AND status='QUEUED'`로 상태를 바꾸고 rowcount가 1일 때만 가져간다. SQLite는 WAL + busy_timeout.
+- **SSE**: `job_events.seq`를 이벤트 id로 쓴다. 재연결 시 `Last-Event-ID`(또는 `?after=`) 이후만 다시 보낸다. 종료 상태면 `event: end`.
+- **파일 서빙**: `/api/files/{path}`는 `data/projects` 하위로 resolve되는 파일만 허용 (`Storage.resolve_public`).
+- **단계 독립성**: 각 단계는 job 디렉터리의 정해진 파일을 읽고 쓰며, 결과 요약만 `jobs.result`(JSON)에 합친다.
+- **워커 재시작**: 시작 시 실행 상태로 남은 job을 FAILED(INTERNAL, 재시도 가능) 처리.
+- **보관 기간**: 워커가 10분마다 `RETENTION_HOURS`가 지난 프로젝트(실행 중 제외)를 DB·파일 모두 삭제.

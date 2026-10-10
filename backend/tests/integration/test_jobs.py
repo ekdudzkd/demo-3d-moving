@@ -173,3 +173,21 @@ def test_completed_job_has_asset(client, settings):
     assert asset["spawn_position"] == [0.0, 1.0, 0.0]
     assert client.get(asset["mesh_url"]).headers["content-type"] == "model/gltf-binary"
     assert client.get("/api/assets/ast_nope").status_code == 404
+
+
+def test_report_contents(client, settings):
+    job = new_job(client, confirmed_project(client, "car"))
+    run_pending(worker_ctx(settings))
+    body = client.get(f"/api/jobs/{job['id']}").json()
+    report = client.get(body["files"]["report"]).json()
+    assert report["outcome"] == body["outcome"]
+    assert report["model"]["name"] == "mock"
+    assert report["input"]["mask"]["version"] == body["mask_version"]
+    assert [t["stage"] for t in report["timings"]["stages"]] == STAGE_ORDER
+    diff = {r["metric"]: r for r in report["quality"]["diff"]}
+    assert diff["grounded"]["improved"] and diff["connected_components"]["improved"]
+    types = {f["type"]: f for f in report["failure_types"]}
+    assert types["FLOATING_COMPONENT"]["fixed_by_repair"]
+    assert types["INVALID_ORIGIN"]["fixed_by_repair"]
+    for url in report["downloads"].values():
+        assert client.get(url).status_code == 200
