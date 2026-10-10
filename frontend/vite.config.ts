@@ -10,6 +10,8 @@ export default defineConfig({
   server: {
     port: 5391,
     strictPort: true,
+    // assets/samples (저장소 루트) 이미지를 import하기 위해
+    fs: { allow: [".."] },
     proxy: { "/api": { target: API_TARGET, changeOrigin: true } },
   },
   build: {
@@ -17,7 +19,9 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    globals: true,
     setupFiles: ["./tests/setup.ts"],
+    include: ["tests/**/*.test.{ts,tsx}"],
     css: { modules: { classNameStrategy: "non-scoped" } },
   },
 });
