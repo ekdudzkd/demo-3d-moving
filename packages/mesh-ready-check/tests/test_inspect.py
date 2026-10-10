@@ -187,3 +187,26 @@ def test_obj_roundtrip(tmp_path):
 @pytest.mark.parametrize("name", sorted(meshes.ALL))
 def test_every_fixture_produces_serializable_report(name):
     json.dumps(inspect_mesh(meshes.ALL[name]()).to_dict())
+
+
+def test_glb_vertex_colors_detected_with_material(tmp_path):
+    """머티리얼이 있는 GLB는 trimesh가 COLOR_0을 버리므로 glTF 속성을 직접 읽어야 한다."""
+    import struct
+
+    path = tmp_path / "with_material.glb"
+    meshes.clean_box().export(path)
+    raw = path.read_bytes()
+    (length,) = struct.unpack("<I", raw[12:16])
+    gltf = json.loads(raw[20 : 20 + length])
+    gltf["materials"] = [{"pbrMetallicRoughness": {"metallicFactor": 0.0}}]
+    for prim in gltf["meshes"][0]["primitives"]:
+        prim["material"] = 0
+    chunk = json.dumps(gltf).encode()
+    chunk += b" " * (-len(chunk) % 4)
+    rest = raw[20 + length :]
+    body = struct.pack("<I4s", len(chunk), b"JSON") + chunk + rest
+    path.write_bytes(struct.pack("<4sII", b"glTF", 2, 12 + len(body)) + body)
+
+    r = inspect_path(path)
+    assert r.has_vertex_colors
+    assert "no_color" not in codes(r)

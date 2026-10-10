@@ -110,3 +110,19 @@ def test_glb_keeps_vertex_colors(tmp_path):
     colored(trimesh.creation.box()).export(src)
     to_glb(src, tmp_path / "m.glb")
     assert inspect_path(tmp_path / "m.glb").has_vertex_colors
+
+
+def test_glb_has_material_normals_and_linear_colors(tmp_path):
+    from app.export.glb import read_gltf_json, write_glb
+
+    path = tmp_path / "m.glb"
+    write_glb(colored(trimesh.creation.box(), (250, 200, 40)), path)
+    gltf = read_gltf_json(path.read_bytes())
+    prim = gltf["meshes"][0]["primitives"][0]
+    assert "NORMAL" in prim["attributes"]
+    mat = gltf["materials"][prim["material"]]
+    assert mat["pbrMetallicRoughness"]["metallicFactor"] == 0.0
+    # 단색 메시라 COLOR_0 accessor의 max가 곧 저장된 색. sRGB (250, 200, 40) → linear 약 (243, 147, 5)
+    rgb = gltf["accessors"][prim["attributes"]["COLOR_0"]]["max"][:3]
+    assert abs(rgb[0] - 243) <= 2 and abs(rgb[1] - 147) <= 2 and rgb[2] <= 6
+    assert inspect_path(path).has_vertex_colors

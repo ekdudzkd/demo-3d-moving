@@ -11,6 +11,7 @@ from app.db.models import Job, new_id
 from mesh_ready_check import load_mesh
 
 from .collider import build_collider
+from .glb import write_glb
 
 SPAWN_HEIGHT = 1.0
 
@@ -19,7 +20,7 @@ def to_glb(src: Path, dst: Path) -> None:
     mesh, _ = load_mesh(src)
     if len(mesh.faces) == 0:
         raise PipelineError(ErrorCode.EXPORT_FAILED, f"빈 메시: {src.name}")
-    dst.write_bytes(mesh.export(file_type="glb"))
+    write_glb(mesh, dst)
 
 
 def export_assets(ctx: AppContext, job: Job, job_dir: Path, display_name: str) -> dict:

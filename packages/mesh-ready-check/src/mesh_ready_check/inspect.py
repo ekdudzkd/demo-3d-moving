@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import struct
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,11 +46,38 @@ def visual_info(mesh: trimesh.Trimesh) -> VisualInfo:
     return info
 
 
+def gltf_visual_info(path: Path) -> VisualInfo:
+    """glTF 속성을 직접 읽는다. trimesh는 머티리얼이 있으면 COLOR_0을 버리기 때문."""
+    suffix = path.suffix.lower()
+    try:
+        if suffix == ".glb":
+            raw = path.read_bytes()
+            (length,) = struct.unpack("<I", raw[12:16])
+            gltf = json.loads(raw[20 : 20 + length])
+        elif suffix == ".gltf":
+            gltf = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            return VisualInfo()
+    except (OSError, ValueError, struct.error):
+        return VisualInfo()
+    info = VisualInfo()
+    materials = gltf.get("materials", [])
+    for mesh in gltf.get("meshes", []):
+        for prim in mesh.get("primitives", []):
+            attrs = prim.get("attributes", {})
+            info.has_vertex_colors |= "COLOR_0" in attrs
+            info.has_uv |= "TEXCOORD_0" in attrs
+            mat = materials[prim["material"]] if "material" in prim else {}
+            info.has_texture |= "baseColorTexture" in mat.get("pbrMetallicRoughness", {})
+    return info
+
+
 def load_mesh(path: str | Path) -> tuple[trimesh.Trimesh, VisualInfo]:
     """파일을 읽어 단일 메시로 합친다. 장면이면 노드 변환을 적용한 뒤 합친다."""
+    path = Path(path)
     loaded = trimesh.load(str(path))
     if isinstance(loaded, trimesh.Trimesh):
-        return loaded, visual_info(loaded)
+        return loaded, visual_info(loaded).merge(gltf_visual_info(path))
     if not isinstance(loaded, trimesh.Scene):
         raise ValueError(f"메시가 아닌 파일입니다: {type(loaded).__name__}")
 
@@ -63,6 +92,7 @@ def load_mesh(path: str | Path) -> tuple[trimesh.Trimesh, VisualInfo]:
         part = geom.copy()
         part.apply_transform(transform)
         meshes.append(part)
+    info = info.merge(gltf_visual_info(path))
     if not meshes:
         return trimesh.Trimesh(), info
     return trimesh.util.concatenate(meshes), info

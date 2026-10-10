@@ -128,8 +128,12 @@ def silhouette_mesh(rgba: np.ndarray) -> trimesh.Trimesh:
 
 def _sample_colors(rgba: np.ndarray, vertices: np.ndarray) -> np.ndarray:
     h, w = rgba.shape[:2]
-    # 경계 밖(투명) 좌표는 가장 가까운 불투명 픽셀 색을 쓴다
-    _, (iy, ix) = ndimage.distance_transform_edt(rgba[..., 3] <= 127, return_indices=True)
+    # 경계 밖 좌표는 가장 가까운 안쪽 픽셀 색을 쓴다. 그림 윤곽선(검정)이 측면 전체에 번지지 않도록
+    # 마스크를 조금 깎은 영역에서 고른다
+    solid = rgba[..., 3] > 127
+    inner = ndimage.binary_erosion(solid, iterations=max(1, round(min(h, w) * 0.02)))
+    source = inner if inner.sum() > 0.2 * solid.sum() else solid
+    _, (iy, ix) = ndimage.distance_transform_edt(~source, return_indices=True)
     px = np.clip(((vertices[:, 0] + 0.5) * w).astype(int), 0, w - 1)
     py = np.clip(((0.5 - vertices[:, 1]) * h).astype(int), 0, h - 1)
     rgb = rgba[iy[py, px], ix[py, px], :3]

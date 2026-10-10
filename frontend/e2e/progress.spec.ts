@@ -1,14 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-const SHOTS = process.env.E2E_SHOTS_DIR;
-
-export async function startJob(page: Page, sample = "사과") {
-  await page.goto("/");
-  await page.getByRole("button", { name: sample }).click();
-  await page.getByRole("button", { name: "객체 선택으로 →" }).click();
-  await page.getByRole("button", { name: "이 마스크로 3D 생성 →" }).click();
-  await expect(page).toHaveURL(/\/jobs\/job_[a-f0-9]+$/);
-}
+import { SHOTS, startJob } from "./helpers";
 
 test("생성 단계가 실제 순서대로 진행되고 완료된다", async ({ page }) => {
   await startJob(page);

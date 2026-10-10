@@ -1,0 +1,47 @@
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.single {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.view {
+  margin: 0;
+  height: 460px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.view > div {
+  flex: 1;
+}
+
+.view figcaption {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .split,
+  .panels {
+    grid-template-columns: 1fr;
+  }
+}
