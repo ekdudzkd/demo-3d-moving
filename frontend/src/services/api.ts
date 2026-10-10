@@ -54,8 +54,17 @@ export interface Health {
   max_upload_mb: number;
 }
 
+export interface ModelEntry {
+  name: string;
+  enabled: boolean;
+  reason: string;
+  info: { name: string; description?: string; min_vram_mb: number; commercial_use: string } | null;
+  environment: { ok: boolean; device: string; gpu_name?: string | null; problems: string[] } | null;
+}
+
 export const api = {
   health: () => request<Health>("/api/health"),
+  models: () => request<{ default: string; adapters: ModelEntry[] }>("/api/health/models"),
 
   async createProject(file: File): Promise<UploadResult> {
     const form = new FormData();
