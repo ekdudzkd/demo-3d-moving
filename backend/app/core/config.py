@@ -7,7 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # backend/에서 실행해도 저장소 루트의 .env를 읽는다
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
 
     data_dir: Path = Path("./data")
     database_url: str = ""  # 비우면 {data_dir}/draw2world.db
