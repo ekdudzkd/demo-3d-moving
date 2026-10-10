@@ -1,0 +1,52 @@
+# --- 비밀·환경 ---
+.env
+.env.*
+!.env.example
+
+# --- 런타임 데이터 (사용자 업로드·생성물) ---
+data/
+evals/input-images/
+evals/segmentation-labels/
+evals/generation-results/
+
+# --- 모델 가중치·캐시 ---
+weights/
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.onnx
+.cache/
+hf_cache/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Node ---
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# --- 에디터·OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- 로그 ---
+*.log

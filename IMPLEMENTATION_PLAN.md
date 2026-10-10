@@ -179,7 +179,7 @@ data/projects/{project_id}/
 
 | ID | 작업 | 산출물 | 스모크 테스트 | 상태 |
 |---|---|---|---|---|
-| 1-1 | 저장소 기본 설정 | `.gitignore`, `.env.example`, `README.md`, `LICENSE`, `docs/*.md` 초안, CI 골격 | `git check-ignore data/x.png .env` 둘 다 무시됨 | 🟡 진행중 |
+| 1-1 | 저장소 기본 설정 | `.gitignore`, `.env.example`, `README.md`, `LICENSE`, `docs/*.md` 초안, CI 골격 | `git check-ignore data/x.png .env` 둘 다 무시됨 | ✅ 완료 |
 | 1-2 | mesh-ready-check 패키지 | inspect·CLI·임계값·테스트 픽스처 | `pytest packages/mesh-ready-check` 통과 + 박스 메시에 CLI 실행 시 exit 0, 떠있는 조각 메시 `--fail-on warn` exit 1 | ⬜ 대기 |
 | 1-3 | 백엔드 골격 | FastAPI 앱, 설정, DB 모델, 세션, `/api/health` | uvicorn 기동 → `GET /api/health` 200 | ⬜ 대기 |
 | 1-4 | 입력 검사 + 업로드 API | `input/`, `POST/GET /api/projects`, 샘플 이미지 생성 스크립트 | 샘플 PNG 업로드 → `VALIDATED`, 4px 이미지 → `REJECTED` | ⬜ 대기 |
@@ -235,3 +235,4 @@ data/projects/{project_id}/
 | 날짜 | ID | 결과 | 비고 |
 |---|---|---|---|
 | 2026-10-11 | 0-0 | ✅ 완료 | 설계 문서·제안서·구현 계획 작성 |
+| 2026-10-11 | 1-1 | ✅ 완료 | ignore 규칙 6종 확인, 금지 파일 검사 정상/위반 케이스 모두 기대대로, CI YAML 파싱·`contents: read` 확인. 로컬 Python 없음 → uv로 3.12 사용 |
