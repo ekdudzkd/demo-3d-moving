@@ -182,7 +182,7 @@ data/projects/{project_id}/
 | 1-1 | 저장소 기본 설정 | `.gitignore`, `.env.example`, `README.md`, `LICENSE`, `docs/*.md` 초안, CI 골격 | `git check-ignore data/x.png .env` 둘 다 무시됨 | ✅ 완료 |
 | 1-2 | mesh-ready-check 패키지 | inspect·CLI·임계값·테스트 픽스처 | `pytest packages/mesh-ready-check` 통과 + 박스 메시에 CLI 실행 시 exit 0, 떠있는 조각 메시 `--fail-on warn` exit 1 | ✅ 완료 |
 | 1-3 | 백엔드 골격 | FastAPI 앱, 설정, DB 모델, 세션, `/api/health` | uvicorn 기동 → `GET /api/health` 200 | ✅ 완료 |
-| 1-4 | 입력 검사 + 업로드 API | `input/`, `POST/GET /api/projects`, 샘플 이미지 생성 스크립트 | 샘플 PNG 업로드 → `VALIDATED`, 4px 이미지 → `REJECTED` | 🟡 진행중 |
+| 1-4 | 입력 검사 + 업로드 API | `input/`, `POST/GET /api/projects`, 샘플 이미지 생성 스크립트 | 샘플 PNG 업로드 → `VALIDATED`, 4px 이미지 → `REJECTED` | ✅ 완료 |
 | 1-5 | 분할 (GrabCut) + 마스크 API | `segmentation/`, segment·confirm API | 샘플 업로드 → segment → 마스크 PNG coverage 0.05~0.9 → confirm 시 `MASK_CONFIRMED` | ⬜ 대기 |
 | 1-6 | 전처리 | `preprocess/` 단계별 이미지 저장 | 정규화 결과 512×512 RGBA, 전경 bbox 중심 ±2%, 전경 비율 0.85±0.05 | ⬜ 대기 |
 | 1-7 | Adapter + MockAdapter | 인터페이스, mock(픽스처 메시·지연·실패 주입), registry, `/api/health/models` | `/api/health/models`에 mock ok, mock generate → OBJ 생성 | ⬜ 대기 |
@@ -238,3 +238,4 @@ data/projects/{project_id}/
 | 2026-10-11 | 1-1 | ✅ 완료 | ignore 규칙 6종 확인, 금지 파일 검사 정상/위반 케이스 모두 기대대로, CI YAML 파싱·`contents: read` 확인. 로컬 Python 없음 → uv로 3.12 사용 |
 | 2026-10-11 | 1-2 | ✅ 완료 | pytest 42개 통과, ruff check/format 통과. CLI 스모크: clean_box exit 0, floating_piece `--fail-on warn` exit 1, two_halves exit 1 + JSON 보고서 생성. Windows 스마트 앱 컨트롤이 numpy DLL 차단 → WSL에서 실행(D-013) |
 | 2026-10-11 | 1-3 | ✅ 완료 | pytest 5개·ruff 통과. uvicorn 기동 → /api/health 200, 경로 탈출 404, SQLite WAL 생성 확인 |
+| 2026-10-11 | 1-4 | ✅ 완료 | pytest 22개 통과. 서버 스모크: 샘플 3장 업로드 → VALIDATED(coverage 0.11~0.16, 객체 1개, 경고 없음), 4px → 422 REJECTED(저장 안 함) |

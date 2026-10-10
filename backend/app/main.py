@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api import files, health
+from app.api import files, health, projects
 from app.core.config import Settings
 from app.core.context import build_context
 
@@ -19,6 +19,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    for module in (health, files):
+    for module in (health, files, projects):
         app.include_router(module.router)
     return app

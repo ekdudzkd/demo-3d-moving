@@ -40,7 +40,7 @@ select = ["E", "F", "I", "B", "UP"]
 ignore = ["B008", "E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "mesh_ready_check"]
+known-first-party = ["app", "mesh_ready_check", "images"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

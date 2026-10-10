@@ -1,0 +1,23 @@
+[
+  {
+    "id": "apple",
+    "file": "apple.png",
+    "description": "빨간 사과 (단순 원형, 쉬움)",
+    "license": "CC0-1.0",
+    "source": "scripts/make_samples.py"
+  },
+  {
+    "id": "car",
+    "file": "car.png",
+    "description": "파란 자동차 (바퀴·창문 등 여러 부분)",
+    "license": "CC0-1.0",
+    "source": "scripts/make_samples.py"
+  },
+  {
+    "id": "star",
+    "file": "star.png",
+    "description": "노란 별 캐릭터 (뾰족한 모서리)",
+    "license": "CC0-1.0",
+    "source": "scripts/make_samples.py"
+  }
+]
