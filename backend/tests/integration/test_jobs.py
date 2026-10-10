@@ -160,3 +160,16 @@ def test_preprocess_options_applied(client, settings):
     alpha = Image.open(path).getchannel("A")
     x0, y0, x1, y1 = alpha.point(lambda v: 255 if v > 127 else 0).getbbox()
     assert abs(max(x1 - x0, y1 - y0) / 512 - 0.6) < 0.03
+
+
+def test_completed_job_has_asset(client, settings):
+    job = new_job(client, confirmed_project(client, "star"))
+    run_pending(worker_ctx(settings))
+    body = client.get(f"/api/jobs/{job['id']}").json()
+    assert body["asset_id"]
+    asset = client.get(f"/api/assets/{body['asset_id']}").json()
+    assert asset["interaction_type"] == "movable"
+    assert asset["collision_type"] in {"convex_hull", "bounding_box"}
+    assert asset["spawn_position"] == [0.0, 1.0, 0.0]
+    assert client.get(asset["mesh_url"]).headers["content-type"] == "model/gltf-binary"
+    assert client.get("/api/assets/ast_nope").status_code == 404

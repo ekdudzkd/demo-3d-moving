@@ -13,9 +13,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from sqlalchemy.orm import object_session
+
 from app.core.context import AppContext
 from app.core.errors import ErrorCode, PipelineError
-from app.db.models import Job, utcnow
+from app.db.models import Asset, Job, utcnow
 from app.export.build import export_assets
 from app.generation.base import GenerationOptions
 from app.generation.registry import get_adapter
@@ -88,7 +90,12 @@ def stage_repair(s: StageInput) -> dict:
 
 
 def stage_export(s: StageInput) -> dict:
-    exported = export_assets(s.ctx, s.job, s.dir)
+    exported = export_assets(s.ctx, s.job, s.dir, display_name="My Drawing")
+    asset = exported["asset"]
+    session = object_session(s.job)
+    session.add(
+        Asset(id=asset["asset_id"], job_id=s.job.id, display_name=asset["display_name"], data=asset)
+    )
     return {"export": exported}
 
 

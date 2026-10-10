@@ -187,7 +187,7 @@ data/projects/{project_id}/
 | 1-6 | 전처리 | `preprocess/` 단계별 이미지 저장 | 정규화 결과 512×512 RGBA, 전경 bbox 중심 ±2%, 전경 비율 0.85±0.05 | ✅ 완료 |
 | 1-7 | Adapter + MockAdapter | 인터페이스, mock(픽스처 메시·지연·실패 주입), registry, `/api/health/models` | `/api/health/models`에 mock ok, mock generate → OBJ 생성 | ✅ 완료 |
 | 1-8 | Job 상태머신 + 워커 + SSE | `jobs/`, `worker.py`, job API, SSE | job 생성 → 워커 1회 실행 → SSE로 단계 이벤트 순서대로 수신 → `COMPLETED`; `MOCK_FAIL=oom` → `FAILED/CUDA_OOM/retryable` | ✅ 완료 |
-| 1-9 | 보정 + GLB + 충돌체 | `mesh/repair`, `export/` | 떠있는 조각 포함 mock 메시 → 보정 후 components 1, grounded·centered true, GLB 로드 가능, hull ≤ 64점 | 🟡 진행중 |
+| 1-9 | 보정 + GLB + 충돌체 | `mesh/repair`, `export/` | 떠있는 조각 포함 mock 메시 → 보정 후 components 1, grounded·centered true, GLB 로드 가능, hull ≤ 64점 | ✅ 완료 |
 | 1-10 | 보고서 + 통합 테스트 + CI | `report/`, 통합 테스트, `ci.yml` 완성, `scripts/smoke_stage1` | `scripts/smoke_stage1` 전체 흐름 통과, `ruff check` + `pytest` 전체 통과 | ⬜ 대기 |
 
 ### 2단계 — 프론트엔드 6개 화면 (Mock 백엔드로 E2E)
@@ -243,3 +243,4 @@ data/projects/{project_id}/
 | 2026-10-11 | 1-6 | ✅ 완료 | pytest 42개 통과. 샘플 3장: 512×512 RGBA, 전경 중심 (255.5, 255.5), 전경 비율 0.842(목표 0.85±0.05), 단계별 이미지 3장+preprocess.json 저장, 별 결과 육안 확인. 깨끗한 그림에 밝기 보정이 걸리는 문제 → D-016 |
 | 2026-10-11 | 1-7 | ✅ 완료 | pytest 50개 통과. /api/health/models: mock ok, triposr 미구현(3-3), sf3d 플래그 OFF로 비활성. 샘플 3장 mock 생성 → raw.obj 11k~23k 면, 의도한 결함(중앙·바닥·작은 조각) 검출 |
 | 2026-10-11 | 1-8 | ✅ 완료 | pytest 62개 통과. 실제 API+워커 프로세스 스모크: SSE로 QUEUED→5단계 enter/exit(실측 ms)→COMPLETED→end 순서 수신. MOCK_FAIL=oom → GENERATING에서 FAILED, CUDA_OOM, retryable=true. 스모크 중 이전 워커가 남아 있던 스크립트 문제 발견·수정 |
+| 2026-10-11 | 1-9 | ✅ 완료 | pytest 71개 통과. 샘플 3장 실제 워커 실행: 원본 조각 2·중앙/바닥 X → 보정 GLB 조각 1, centered·grounded, 최대 축 1.0, 정점 색 유지, convex hull 10/51/64점, 롤백 없음. 납작 형상 충돌체 판정 버그 수정(두께 하한 있는 상자) |
