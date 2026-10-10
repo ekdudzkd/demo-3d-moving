@@ -1,0 +1,237 @@
+# Draw2World AI — 설계 및 구현 계획
+
+이 문서가 **작업 진행 상황의 단일 기준**이다. 상세 근거는 `docs/proposal.md`, 결정 기록은 `docs/decision-log.md`.
+
+---
+
+## 0. 작업 규칙 (필수)
+
+모든 작업은 아래 순서를 지킨다.
+
+1. 작업 시작 전: 이 문서의 해당 작업 상태를 `🟡 진행중`으로 바꾼다.
+2. 커밋·푸시: `docs(plan): <ID> 진행중`
+3. 구현한다.
+4. 해당 작업의 **스모크 테스트**와 관련 단위 테스트를 실제로 실행한다.
+5. 통과하면 상태를 `✅ 완료`로 바꾸고 작업 로그(§6)에 결과 한 줄을 추가한다.
+6. 커밋·푸시: `feat(<scope>): <ID> <요약>` (코드 + 문서 상태 변경 함께)
+7. 실패하면 `🟡 진행중` 유지, 작업 로그에 실패 내용 기록, 고칠 때까지 완료 처리 금지. 해결 불가 시 `❌ 보류`와 사유 기록.
+
+상태 표기: `⬜ 대기` · `🟡 진행중` · `✅ 완료` · `❌ 보류`
+
+---
+
+## 1. 전체 아키텍처
+
+```
+┌──────────────── Browser (frontend/) ────────────────┐
+│ 업로드 → 마스크 편집 → 진행(SSE) → 3D 뷰어 → 월드 → 보고서 │
+│ React + TS + Vite · R3F · @react-three/rapier · Zustand │
+└───────────────┬────────────────────▲────────────────┘
+                │ REST (JSON, multipart)│ SSE (단계 이벤트)
+┌───────────────▼────────────────────┴────────────────┐
+│ API 서버 (backend/app, FastAPI, Python 3.12)          │
+│  input · segmentation · api · jobs(enqueue) · files   │
+└───────────────┬─────────────────────────────────────┘
+                │ SQLite (projects, masks, jobs, job_events, assets)
+┌───────────────▼─────────────────────────────────────┐
+│ 워커 (python -m app.worker, 동시성 1)                 │
+│  preprocess → generation(adapter) → mesh inspect      │
+│  → repair → export(GLB, collider, asset.json) → report│
+└───────────────┬─────────────────────────────────────┘
+                │ 파일
+        data/ (gitignore) : 업로드·마스크·중간 이미지·메시·보고서
+```
+
+- **대화형 단계**(업로드·검사·분할·마스크 확정)는 API 서버가 동기 처리.
+- **무거운 단계**(전처리~보고서)는 워커가 job 단위로 처리.
+- 모델 호출은 `ImageTo3DAdapter` 경유. 개발·CI는 `MockAdapter`, GPU 머신은 `TripoSRAdapter`.
+- 분할은 `Segmenter` 경유. 기본 `GrabCutSegmenter`, GPU 머신은 `Sam2Segmenter`.
+
+### 상태 모델
+
+```
+Project : UPLOADED → VALIDATED | REJECTED → MASK_PROPOSED → MASK_CONFIRMED
+Job     : QUEUED → PREPROCESSING → GENERATING → VALIDATING → REPAIRING → EXPORTING → COMPLETED
+          (어느 단계든) → FAILED | CANCELLED
+Job.outcome (COMPLETED일 때): USABLE | USABLE_WITH_WARNINGS | NOT_USABLE
+```
+
+---
+
+## 2. 디렉토리 구조 (목표)
+
+```
+draw2world-ai/
+├─ IMPLEMENTATION_PLAN.md        ← 이 문서 (진행 상태)
+├─ CLAUDE.md
+├─ README.md · LICENSE(MIT) · .gitignore · .env.example
+├─ .github/workflows/ci.yml
+├─ docs/
+│  ├─ project-brief.md · proposal.md · build-plan.md · decision-log.md
+│  ├─ architecture.md · model-selection.md · mesh-quality.md
+│  ├─ experiments.md · licenses.md
+├─ packages/
+│  └─ mesh-ready-check/          ← 독립 OSS 패키지 (trimesh만 의존, MIT)
+│     ├─ pyproject.toml
+│     ├─ src/mesh_ready_check/{__init__,inspect,report,cli,thresholds}.py
+│     └─ tests/
+├─ backend/
+│  ├─ pyproject.toml
+│  ├─ app/
+│  │  ├─ main.py                 ← FastAPI 앱 생성
+│  │  ├─ worker.py               ← 워커 진입점
+│  │  ├─ core/                   ← 설정(pydantic-settings), 로깅, 경로, 에러 코드
+│  │  ├─ db/                     ← SQLAlchemy 모델, 세션
+│  │  ├─ api/                    ← 라우터: projects, jobs, assets, health, files
+│  │  ├─ input/                  ← 입력 이미지 검사
+│  │  ├─ segmentation/           ← Segmenter 인터페이스, grabcut, sam2, 후처리
+│  │  ├─ preprocess/             ← 정규화 RGBA 생성
+│  │  ├─ generation/             ← ImageTo3DAdapter, mock, triposr, sf3d, registry
+│  │  ├─ mesh/                   ← inspect(=mesh-ready-check 호출), repair
+│  │  ├─ export/                 ← GLB, collider, asset.json
+│  │  ├─ report/                 ← 보고서, 실패 유형 분류
+│  │  └─ jobs/                   ← 상태머신, 큐 claim, 단계 실행기, 이벤트
+│  └─ tests/{unit,integration,gpu}/
+├─ frontend/
+│  ├─ package.json · vite.config.ts · tsconfig.json
+│  ├─ src/
+│  │  ├─ app/                    ← 라우팅, 레이아웃
+│  │  ├─ features/{upload,segmentation,generation,model-viewer,world,quality-report}/
+│  │  ├─ three/                  ← 공통 R3F 컴포넌트, GLB 로더, 충돌체 변환
+│  │  ├─ services/               ← API 클라이언트, SSE
+│  │  ├─ stores/                 ← Zustand
+│  │  └─ types/api.ts            ← openapi-typescript 생성물
+│  └─ tests/
+├─ docker/gpu-worker.Dockerfile
+├─ evals/
+│  ├─ manifest.csv · configs/ · benchmark.py · compare.py · metrics/
+│  └─ generation-results/        ← gitignore
+├─ assets/
+│  ├─ samples/                   ← 팀 제작 공개 샘플(CC0)
+│  └─ demo-world/
+├─ scripts/                      ← dev 실행, 샘플 생성, 스모크 테스트
+└─ data/                         ← 런타임 저장소 (gitignore)
+```
+
+### 런타임 파일 레이아웃 (`data/`)
+
+```
+data/projects/{project_id}/
+  original.png            ← EXIF 제거·축소 후
+  validation.json
+  masks/mask_v{n}.png · prompts_v{n}.json
+  jobs/{job_id}/
+    preprocess/{01_cutout,02_centered,03_normalized}.png
+    generation/raw.obj · generation_result.json · model.log
+    mesh/inspect_raw.json · repaired.glb · inspect_repaired.json · repair_steps.json
+    export/asset.json · collider.json
+    report.json
+```
+
+---
+
+## 3. 모듈 설계 요약
+
+| 모듈 | 공개 인터페이스 | 입력 → 출력 |
+|---|---|---|
+| input | `validate_image(path) -> ValidationResult` | 업로드 파일 → 검사 결과 JSON |
+| segmentation | `Segmenter.propose(img) / refine(img, prompts) -> Mask` | 이미지+프롬프트 → 이진 마스크 |
+| preprocess | `normalize(img, mask, opts) -> PreprocessResult` | 원본+마스크 → 정규화 RGBA + 단계별 이미지 |
+| generation | `ImageTo3DAdapter.generate(rgba, opts, out_dir, job_id)` | RGBA → 메시 + 측정값 |
+| mesh-ready-check | `inspect(mesh, thresholds) -> Report` | 메시 → 품질 JSON |
+| mesh.repair | `repair(mesh) -> (mesh, steps)` | 메시 → 보정 메시 + 단계별 전후 지표 |
+| export | `to_glb`, `build_collider`, `build_asset` | 보정 메시 → GLB, hull 정점, asset.json |
+| report | `build_report(job) -> Report` | 전 단계 산출물 → 보고서 + 실패 유형 |
+| jobs | `enqueue`, `claim_next`, `run_job`, `cancel` | DB 상태 전이 + 이벤트 기록 |
+
+### API
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| POST | `/api/projects` | 업로드 + 입력 검사 |
+| GET | `/api/projects/{id}` | 프로젝트 상태·검사 결과 |
+| POST | `/api/projects/{id}/segment` | 프롬프트(점·박스)로 마스크 예측 |
+| POST | `/api/projects/{id}/mask/confirm` | 마스크 확정 |
+| POST | `/api/projects/{id}/jobs` | 생성 job 생성 (adapter, options) |
+| GET | `/api/jobs/{id}` | job 상태·결과·실패 정보 |
+| GET | `/api/jobs/{id}/events` | SSE 단계 이벤트 |
+| POST | `/api/jobs/{id}/cancel` · `/retry` | 취소 · 재시도(새 job) |
+| GET | `/api/assets/{id}` | asset.json |
+| GET | `/api/files/{path}` | 산출물 파일 서빙 (data/ 하위만) |
+| GET | `/api/health` · `/api/health/models` | 서버 · adapter 환경 상태 |
+
+### 설정 (`.env`)
+
+`DATA_DIR`, `DATABASE_URL`, `MAX_UPLOAD_MB=10`, `RETENTION_HOURS=24`, `SEGMENTER=grabcut|sam2`, `GENERATOR=mock|triposr|sf3d`, `SF3D_ENABLED=false`, `SF3D_LICENSE_ACCEPTED=false`, `FACE_BUDGET=50000`, `MOCK_FAIL=`(테스트용 실패 주입)
+
+### 테스트 전략
+
+- 단위: 모듈별 pytest / vitest. 메시·이미지 픽스처는 코드로 생성.
+- 통합: Mock 모드로 API→워커→산출물 전체.
+- 스모크: 각 작업마다 아래 표의 명령. 서버를 실제로 띄워 확인하는 것을 원칙으로 함.
+- GPU: `@pytest.mark.gpu`, CI 제외.
+
+---
+
+## 4. 단계별 구현 계획
+
+### 1단계 — 뼈대 + 백엔드 코어 + mesh-ready-check (GPU 불필요)
+
+| ID | 작업 | 산출물 | 스모크 테스트 | 상태 |
+|---|---|---|---|---|
+| 1-1 | 저장소 기본 설정 | `.gitignore`, `.env.example`, `README.md`, `LICENSE`, `docs/*.md` 초안, CI 골격 | `git check-ignore data/x.png .env` 둘 다 무시됨 | ⬜ 대기 |
+| 1-2 | mesh-ready-check 패키지 | inspect·CLI·임계값·테스트 픽스처 | `pytest packages/mesh-ready-check` 통과 + 박스 메시에 CLI 실행 시 exit 0, 떠있는 조각 메시 `--fail-on warn` exit 1 | ⬜ 대기 |
+| 1-3 | 백엔드 골격 | FastAPI 앱, 설정, DB 모델, 세션, `/api/health` | uvicorn 기동 → `GET /api/health` 200 | ⬜ 대기 |
+| 1-4 | 입력 검사 + 업로드 API | `input/`, `POST/GET /api/projects`, 샘플 이미지 생성 스크립트 | 샘플 PNG 업로드 → `VALIDATED`, 4px 이미지 → `REJECTED` | ⬜ 대기 |
+| 1-5 | 분할 (GrabCut) + 마스크 API | `segmentation/`, segment·confirm API | 샘플 업로드 → segment → 마스크 PNG coverage 0.05~0.9 → confirm 시 `MASK_CONFIRMED` | ⬜ 대기 |
+| 1-6 | 전처리 | `preprocess/` 단계별 이미지 저장 | 정규화 결과 512×512 RGBA, 전경 bbox 중심 ±2%, 전경 비율 0.85±0.05 | ⬜ 대기 |
+| 1-7 | Adapter + MockAdapter | 인터페이스, mock(픽스처 메시·지연·실패 주입), registry, `/api/health/models` | `/api/health/models`에 mock ok, mock generate → OBJ 생성 | ⬜ 대기 |
+| 1-8 | Job 상태머신 + 워커 + SSE | `jobs/`, `worker.py`, job API, SSE | job 생성 → 워커 1회 실행 → SSE로 단계 이벤트 순서대로 수신 → `COMPLETED`; `MOCK_FAIL=oom` → `FAILED/CUDA_OOM/retryable` | ⬜ 대기 |
+| 1-9 | 보정 + GLB + 충돌체 | `mesh/repair`, `export/` | 떠있는 조각 포함 mock 메시 → 보정 후 components 1, grounded·centered true, GLB 로드 가능, hull ≤ 64점 | ⬜ 대기 |
+| 1-10 | 보고서 + 통합 테스트 + CI | `report/`, 통합 테스트, `ci.yml` 완성, `scripts/smoke_stage1` | `scripts/smoke_stage1` 전체 흐름 통과, `ruff check` + `pytest` 전체 통과 | ⬜ 대기 |
+
+### 2단계 — 프론트엔드 6개 화면 (Mock 백엔드로 E2E)
+
+| ID | 작업 | 산출물 | 스모크 테스트 | 상태 |
+|---|---|---|---|---|
+| 2-1 | 프론트 골격 | Vite+React+TS, 라우팅, API 타입 생성, proxy, dev 스크립트 | `npm run typecheck && npm run build` 통과, dev 서버에서 `/api/health` 프록시 응답 | ⬜ 대기 |
+| 2-2 | 화면 1 업로드 | 드래그앤드롭, 조건·가이드·샘플·개인정보 안내, 경고 표시 | 샘플 업로드 → 검사 결과·경고 렌더 (vitest + 수동) | ⬜ 대기 |
+| 2-3 | 화면 2 마스크 편집 | 4종 미리보기, 포함/제외 점, 박스, 초기화, 확정 | 점 추가 → segment 호출 → 오버레이 갱신 → 확정 | ⬜ 대기 |
+| 2-4 | 화면 3 생성 진행 | SSE 타임라인, 경과 시간, 로그, 취소·재시도, 실패 메시지 | mock job 단계가 실제 순서대로 표시, 실패 주입 시 메시지·재시도 동작 | ⬜ 대기 |
+| 2-5 | 화면 4 3D 뷰어 | GLB 로딩, orbit, 와이어프레임, 색 토글, 원본/보정 비교, 지표 표, 고지문 | mock GLB 로드·토글 동작, 콘솔 에러 없음 | ⬜ 대기 |
+| 2-6 | 화면 5 월드 | 방, Rapier, WASD·Q/E·Space·R, 상자·공, hull→bbox 폴백 | 자산 스폰 → 이동·회전·점프·밀기 확인, hull 데이터 없으면 bbox로 로드 | ⬜ 대기 |
+| 2-7 | 화면 6 보고서 + CI | 보고서·다운로드, CI에 프론트 잡 추가, README 실행법 | 전체 흐름 수동 E2E, `typecheck/build/test` + 백엔드 테스트 통과 | ⬜ 대기 |
+
+### 3단계 — 실제 AI 연결 (SAM 2 + TripoSR)
+
+| ID | 작업 | 산출물 | 스모크 테스트 | 상태 |
+|---|---|---|---|---|
+| 3-1 | GPU 워커 환경 | `docker/gpu-worker.Dockerfile`, WSL2 설치 문서, 가중치 캐시 볼륨 | 컨테이너에서 `torch.cuda.is_available()` true, TripoSR·SAM2 import 성공 | ⬜ 대기 |
+| 3-2 | Sam2Segmenter | 임베딩 캐시, 누적 프롬프트, multimask 선택, 종이 crop·hole fill | 샘플 3장 segment 성공, 재예측 지연 측정 기록 | ⬜ 대기 |
+| 3-3 | TripoSRAdapter | 회색 합성 512, mc 해상도, 텍스처 베이크, 시간·VRAM 측정, OOM 재시도 | `pytest -m gpu` 통과, 샘플 → `raw.obj` 생성·측정값 기록 | ⬜ 대기 |
+| 3-4 | StableFast3DAdapter | 플래그·라이선스 동의 시에만 등록 | 플래그 OFF면 미등록, ON이면 샘플 1장 생성 | ⬜ 대기 |
+| 3-5 | 보정 강화 + 모델 상태 | quadric 감소, 텍스처 GLB 내장, `/health/models` 실측 | 100k 면 메시 → 50k 이하, GLB 텍스처 포함 확인 | ⬜ 대기 |
+| 3-6 | 그림 10장 스파이크 | 스파이크 스크립트, `docs/experiments.md` 기록 | 10장 실행 완료, 성공/사용가능/시간/VRAM 표 기록 | ⬜ 대기 |
+
+### 4단계 — 평가·실패 분류·개선 비교
+
+| ID | 작업 | 산출물 | 스모크 테스트 | 상태 |
+|---|---|---|---|---|
+| 4-1 | 평가셋 manifest | `evals/manifest.csv` 스키마·검증 스크립트 | 공개 샘플 manifest 검증 통과, 잘못된 행 검출 | ⬜ 대기 |
+| 4-2 | benchmark + 지표 | `benchmark.py`, 마스크 IoU·실루엣 IoU·사용 가능률 등 | `benchmark.py --config evals/configs/smoke.yaml`(mock) → `summary.json` 생성 | ⬜ 대기 |
+| 4-3 | 실패 유형 분류기 | 규칙 기반 분류, 보고서 연동 | 유형별 픽스처 메시가 기대 코드로 분류 | ⬜ 대기 |
+| 4-4 | 비교 + 보고서 UI + CI | `compare.py`, 화면 6 실패 유형·해결 안내, CI 스모크 | 두 run 비교표 생성 → `docs/experiments.md` 반영, CI 통과 | ⬜ 대기 |
+
+---
+
+## 5. 완료 정의 (프로젝트 전체)
+
+`docs/project-brief.md` §24의 14개 시나리오가 GPU 머신에서 실제로 동작하고, 4-4 비교표에 개선 전후 수치가 기록되면 MVP 완료.
+
+---
+
+## 6. 작업 로그
+
+| 날짜 | ID | 결과 | 비고 |
+|---|---|---|---|
+| 2026-10-11 | 0-0 | ✅ 완료 | 설계 문서·제안서·구현 계획 작성 |
