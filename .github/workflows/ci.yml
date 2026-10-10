@@ -52,5 +52,61 @@ jobs:
         run: pytest -q
       - name: 1단계 스모크 (서버+워커 실제 기동)
         run: PY=python bash scripts/smoke_stage1.sh
+      - name: OpenAPI 스키마가 프론트 계약과 같은지
+        run: |
+          python scripts/export_openapi.py
+          git diff --exit-code frontend/openapi.json
 
-  # frontend (typecheck + build + test): 2-7에서 추가
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: API 타입이 openapi.json과 같은지
+        run: npm run gen:api && git diff --exit-code src/types/api.ts
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    env:
+      MOCK_DELAY_MS: "1500"
+      PLAYWRIGHT_CHANNEL: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: pip install -e packages/mesh-ready-check -e "backend[dev]"
+      - run: npm ci && npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: 백엔드(API+워커) 기동
+        run: |
+          DATA_DIR=$RUNNER_TEMP/d2w PY=python bash scripts/dev-backend.sh > $RUNNER_TEMP/backend.log 2>&1 &
+          for i in $(seq 60); do curl -sf localhost:8077/api/health && break; sleep 1; done
+      - name: 프론트 개발 서버 기동
+        working-directory: frontend
+        run: |
+          npx vite > $RUNNER_TEMP/vite.log 2>&1 &
+          for i in $(seq 60); do curl -sf localhost:5391/api/health && break; sleep 1; done
+      - name: Playwright E2E
+        working-directory: frontend
+        run: npx playwright test
+      - name: 실패 시 로그
+        if: failure()
+        run: tail -100 $RUNNER_TEMP/backend.log $RUNNER_TEMP/vite.log

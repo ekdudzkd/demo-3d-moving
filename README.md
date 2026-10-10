@@ -24,21 +24,39 @@ MVP 개발 중. 진행 상황은 [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.
 | [docs/licenses.md](docs/licenses.md) | 사용 모델·라이브러리 라이선스 |
 | [docs/experiments.md](docs/experiments.md) | 실험 기록 |
 
-## 빠른 시작 (백엔드)
+## 빠른 시작
 
-Linux 또는 WSL2, Python 3.12.
+### 1. 백엔드 (Linux 또는 WSL2, Python 3.12)
 
 ```bash
 cp .env.example .env
 python -m venv .venv && . .venv/bin/activate
 pip install -e packages/mesh-ready-check -e "backend[dev]"
-
-cd backend
-uvicorn app.main:create_app --factory --port 8000   # API 서버
-python -m app.worker                                 # 다른 터미널: 생성 워커
+PY=.venv/bin/python bash scripts/dev-backend.sh   # API(:8077) + 생성 워커
 ```
 
-- API 문서: http://localhost:8000/docs
+### 2. 프론트엔드 (Node 20+, Windows·macOS·Linux)
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5391  (/api는 :8077로 프록시)
+```
+
+화면: 업로드 → 객체 선택(마스크 수정) → 생성 진행 → 3D 결과 → 월드(WASD·Q/E·Space·R) → 보고서
+
+### 테스트
+
+| 대상 | 명령 |
+|---|---|
+| mesh-ready-check | `cd packages/mesh-ready-check && pytest` |
+| 백엔드 | `cd backend && pytest` |
+| 1단계 통합 스모크 | `PY=python bash scripts/smoke_stage1.sh` |
+| 프론트 단위 | `cd frontend && npm run typecheck && npm test && npm run build` |
+| E2E (백엔드·프론트 실행 중, `MOCK_DELAY_MS=1500` 권장) | `cd frontend && npx playwright test` (로컬 Edge, CI는 chromium) |
+| API 계약 갱신 | `python scripts/export_openapi.py && (cd frontend && npm run gen:api)` |
+
+- API 문서: http://localhost:8077/docs
 - 테스트: `cd backend && pytest`
 - 전체 흐름 스모크: `PY=python bash scripts/smoke_stage1.sh`
 - 기본값은 `GENERATOR=mock`(실루엣 돌출, AI 아님), `SEGMENTER=grabcut`. 실제 모델은 3단계.

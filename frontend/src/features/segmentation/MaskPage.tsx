@@ -173,7 +173,7 @@ export function MaskPage() {
           onPointerUp={onPointerUp}
           data-testid="mask-stage"
         >
-          {previews ? <img src={previews.overlay} alt="원본과 선택 영역" draggable={false} /> : <img src={project.original_url} alt="원본" draggable={false} />}
+          {previews ? <img src={previews.overlay} alt="원본과 선택 영역" draggable={false} /> : <img src={project.original_url} alt="원본 (마스크 불러오는 중)" draggable={false} />}
           <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={styles.svg} aria-hidden>
             {box && (
               <rect x={box[0]} y={box[1]} width={box[2] - box[0]} height={box[3] - box[1]} className={styles.box} strokeWidth={r / 3} />
