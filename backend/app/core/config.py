@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     mock_delay_ms: int = 0
 
     worker_poll_seconds: float = 1.0
-    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    cors_origins: list[str] = ["http://localhost:5391", "http://127.0.0.1:5391"]
 
     # 3단계: 모델 가중치 위치
     model_cache_dir: Path = Path("./data/models")

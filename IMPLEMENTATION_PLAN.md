@@ -194,7 +194,7 @@ data/projects/{project_id}/
 
 | ID | 작업 | 산출물 | 스모크 테스트 | 상태 |
 |---|---|---|---|---|
-| 2-1 | 프론트 골격 | Vite+React+TS, 라우팅, API 타입 생성, proxy, dev 스크립트 | `npm run typecheck && npm run build` 통과, dev 서버에서 `/api/health` 프록시 응답 | 🟡 진행중 |
+| 2-1 | 프론트 골격 | Vite+React+TS, 라우팅, API 타입 생성, proxy, dev 스크립트 | `npm run typecheck && npm run build` 통과, dev 서버에서 `/api/health` 프록시 응답 | ✅ 완료 |
 | 2-2 | 화면 1 업로드 | 드래그앤드롭, 조건·가이드·샘플·개인정보 안내, 경고 표시 | 샘플 업로드 → 검사 결과·경고 렌더 (vitest + 수동) | ⬜ 대기 |
 | 2-3 | 화면 2 마스크 편집 | 4종 미리보기, 포함/제외 점, 박스, 초기화, 확정 | 점 추가 → segment 호출 → 오버레이 갱신 → 확정 | ⬜ 대기 |
 | 2-4 | 화면 3 생성 진행 | SSE 타임라인, 경과 시간, 로그, 취소·재시도, 실패 메시지 | mock job 단계가 실제 순서대로 표시, 실패 주입 시 메시지·재시도 동작 | ⬜ 대기 |
@@ -245,3 +245,4 @@ data/projects/{project_id}/
 | 2026-10-11 | 1-8 | ✅ 완료 | pytest 62개 통과. 실제 API+워커 프로세스 스모크: SSE로 QUEUED→5단계 enter/exit(실측 ms)→COMPLETED→end 순서 수신. MOCK_FAIL=oom → GENERATING에서 FAILED, CUDA_OOM, retryable=true. 스모크 중 이전 워커가 남아 있던 스크립트 문제 발견·수정 |
 | 2026-10-11 | 1-9 | ✅ 완료 | pytest 71개 통과. 샘플 3장 실제 워커 실행: 원본 조각 2·중앙/바닥 X → 보정 GLB 조각 1, centered·grounded, 최대 축 1.0, 정점 색 유지, convex hull 10/51/64점, 롤백 없음. 납작 형상 충돌체 판정 버그 수정(두께 하한 있는 상자) |
 | 2026-10-11 | 1-10 | ✅ 완료 | pytest 77개·ruff 통과. scripts/smoke_stage1.sh: 서버 기동 → job 완료(USABLE) → 산출물 10종 다운로드 → 보고서 스키마 → asset → SSE end → 실패 주입(CUDA_OOM) 모두 통과. CI에 backend 잡(ruff·pytest·스모크) 추가 |
+| 2026-10-11 | 2-1 | ✅ 완료 | typecheck·build·vitest 12개 통과. Vite(5391) → WSL 백엔드(8077) 프록시 /api/health 응답 확인, SPA 라우트 200. 포트 충돌(5173·5180·8000 다른 앱 점유) 발견 → D-017 |
