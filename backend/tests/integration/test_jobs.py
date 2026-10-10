@@ -191,3 +191,16 @@ def test_report_contents(client, settings):
     assert types["INVALID_ORIGIN"]["fixed_by_repair"]
     for url in report["downloads"].values():
         assert client.get(url).status_code == 200
+
+
+def test_timestamps_are_utc_aware(client):
+    job = new_job(client, confirmed_project(client))
+    body = client.get(f"/api/jobs/{job['id']}").json()
+    assert body["created_at"].endswith("Z") or body["created_at"].endswith("+00:00")
+    assert body["events"][0]["at"].endswith("Z") or body["events"][0]["at"].endswith("+00:00")
+
+
+def test_cancelled_queued_job_has_error_info(client):
+    job = new_job(client, confirmed_project(client))
+    body = client.post(f"/api/jobs/{job['id']}/cancel").json()
+    assert body["error"]["code"] == "CANCELLED" and body["error"]["retryable"]

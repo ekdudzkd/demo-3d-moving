@@ -64,6 +64,13 @@ def request_cancel(session: Session, job: Job) -> bool:
     if status is JobStatus.QUEUED:
         job.status = JobStatus.CANCELLED.value
         job.finished_at = utcnow()
+        job.error = {
+            "stage": JobStatus.QUEUED.value,
+            "code": "CANCELLED",
+            "user_message": "사용자가 작업을 취소했습니다.",
+            "retryable": True,
+            "detail": "",
+        }
         add_event(session, job.id, JobStatus.CANCELLED.value, "status", "대기 중 취소됨")
     else:
         job.cancel_requested = True

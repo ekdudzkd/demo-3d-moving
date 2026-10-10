@@ -6,6 +6,9 @@ const channel = process.env.PLAYWRIGHT_CHANNEL ?? "msedge";
 export default defineConfig({
   testDir: "e2e",
   timeout: 90_000,
+  // 백엔드 워커가 1개(D-002)라 작업이 서로 기다리지 않도록 순차 실행
+  workers: 1,
+  fullyParallel: false,
   expect: { timeout: 20_000 },
   reporter: [["list"]],
   use: {

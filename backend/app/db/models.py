@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 
 def utcnow() -> datetime:
@@ -13,6 +14,23 @@ def utcnow() -> datetime:
 
 def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
+
+
+class UTCDateTime(TypeDecorator):
+    """SQLite는 시간대를 저장하지 않으므로 UTC로 저장하고 읽을 때 UTC를 붙인다."""
+
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and value.tzinfo is not None:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
 
 
 class Base(DeclarativeBase):
@@ -28,7 +46,7 @@ class Project(Base):
     height: Mapped[int] = mapped_column(Integer)
     validation: Mapped[dict] = mapped_column(JSON)
     confirmed_mask_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
     masks: Mapped[list[Mask]] = relationship(
         back_populates="project", order_by="Mask.version", cascade="all, delete-orphan"
@@ -48,7 +66,7 @@ class Mask(Base):
     coverage: Mapped[float] = mapped_column(Float)
     prompts: Mapped[dict] = mapped_column(JSON)
     elapsed_ms: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
     project: Mapped[Project] = relationship(back_populates="masks")
 
@@ -68,9 +86,9 @@ class Job(Base):
     result: Mapped[dict] = mapped_column(JSON, default=dict)
     cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
     retry_of: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     project: Mapped[Project] = relationship(back_populates="jobs")
     events: Mapped[list[JobEvent]] = relationship(
@@ -88,7 +106,7 @@ class JobEvent(Base):
     kind: Mapped[str] = mapped_column(String(16))  # enter | exit | log | error | status
     message: Mapped[str] = mapped_column(Text, default="")
     elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
     job: Mapped[Job] = relationship(back_populates="events")
 
@@ -100,4 +118,4 @@ class Asset(Base):
     job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), unique=True)
     display_name: Mapped[str] = mapped_column(String(128))
     data: Mapped[dict] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
