@@ -200,7 +200,7 @@ data/projects/{project_id}/
 | 2-4 | 화면 3 생성 진행 | SSE 타임라인, 경과 시간, 로그, 취소·재시도, 실패 메시지 | mock job 단계가 실제 순서대로 표시, 실패 주입 시 메시지·재시도 동작 | ✅ 완료 |
 | 2-5 | 화면 4 3D 뷰어 | GLB 로딩, orbit, 와이어프레임, 색 토글, 원본/보정 비교, 지표 표, 고지문 | mock GLB 로드·토글 동작, 콘솔 에러 없음 | ✅ 완료 |
 | 2-6 | 화면 5 월드 | 방, Rapier, WASD·Q/E·Space·R, 상자·공, hull→bbox 폴백 | 자산 스폰 → 이동·회전·점프·밀기 확인, hull 데이터 없으면 bbox로 로드 | ✅ 완료 |
-| 2-7 | 화면 6 보고서 + CI | 보고서·다운로드, CI에 프론트 잡 추가, README 실행법 | 전체 흐름 수동 E2E, `typecheck/build/test` + 백엔드 테스트 통과 | ⬜ 대기 |
+| 2-7 | 화면 6 보고서 + CI | 보고서·다운로드, CI에 프론트 잡 추가, README 실행법 | 전체 흐름 수동 E2E, `typecheck/build/test` + 백엔드 테스트 통과 | 🟡 진행중 |
 
 ### 3단계 — 실제 AI 연결 (SAM 2 + TripoSR)
 
