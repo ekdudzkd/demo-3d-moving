@@ -23,3 +23,4 @@
 | D-017 | 2026-10-11 | 개발 포트: 백엔드 8077, 프론트 5391 | 개발 PC에서 5173·5180·8000이 다른 앱에 점유됨 (Windows 8000은 다른 Python 앱). 기본값과 겹치지 않게 | 5173/8000 기본값 |
 | D-018 | 2026-10-11 | 프론트는 Windows Node, 백엔드는 WSL. Vite 프록시가 WSL localhost 포워딩으로 백엔드에 연결 | esbuild·rollup Windows 바이너리는 스마트 앱 컨트롤에 막히지 않음. Python 네이티브만 문제 (D-013) | 프론트도 WSL |
 | D-019 | 2026-10-11 | GLB는 비금속 기본 머티리얼·노멀·linear 정점 색으로 쓴다. mesh-ready-check는 glTF 속성(COLOR_0·TEXCOORD_0·baseColorTexture)을 직접 읽는다 | trimesh 기본 출력은 머티리얼이 없어 glTF 기본값(metallic 1.0)으로 어둡게 보였고, 머티리얼을 넣으면 trimesh가 읽을 때 COLOR_0을 버려 색 검사가 틀림 | 프론트에서만 머티리얼 보정 |
+| D-020 | 2026-10-11 | GPU 환경에서 torchmcubes 대신 scikit-image marching cubes 대체 모듈, rembg는 빈 모듈. CUDA 툴킷 설치 불필요 | torchmcubes는 CUDA 툴킷 버전을 맞춰 소스 빌드해야 해 설치가 자주 실패. marching cubes는 CPU로도 1~2초 수준이라 병목이 아님. rembg는 쓰지 않음(D-006) | torchmcubes 소스 빌드, PyMCubes |

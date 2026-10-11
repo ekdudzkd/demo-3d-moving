@@ -252,3 +252,4 @@ data/projects/{project_id}/
 | 2026-10-11 | 2-5 | ✅ 완료 | vitest 29개·pytest 80개·mesh-ready-check 43개 통과. E2E(Edge): 완료 작업 → 원본·보정본 뷰어 2개(WebGL) → 품질 표(바닥·조각 전후) → 와이어프레임 토글 → 비교 끄기, 페이지 오류 없음. 화면에서 색이 어둡게 보이는 문제 발견 → GLB 머티리얼·노멀·linear 색 보정(D-019) |
 | 2026-10-11 | 2-6 | ✅ 완료 | vitest 37개 통과. E2E(Edge, 실제 Rapier 물리): 자동차 자산 스폰 → 바닥 착지 → W 0.7초 이동 0.5m 이상 → Q 회전 0.3rad 이상 → Space 점프 y>0.15 → R 원위치 → 충돌체 디버그 표시(convex hull 42점). 스크린샷 확인 |
 | 2026-10-11 | 2-7 | ✅ 완료 | typecheck·vitest 37개·build 통과. Playwright E2E 전체 8개 통과(업로드 2, 마스크, 진행 2, 결과, 월드, 보고서) — 마스크 미리보기 alt 중복으로 1건 실패 → 수정 후 재실행 통과. 보고서 다운로드 5종 200·GLB 매직 확인. 도중 WSL ext4가 I/O 오류로 읽기 전용 전환 → wsl --shutdown으로 복구(데이터 유지) |
+| 2026-10-11 | 3-1 | 🟡 진행중 (실패) | 점검 스크립트 `scripts/check_gpu_env.py`·`pytest -m gpu` 테스트·.dockerignore 추가, Dockerfile uv 설치 수정. WSL venv에 torch 없었음(이전 설치 중단) → 재설치 중 uv 캐시 휠 손상·Bus error·ext4 읽기 전용 반복. 원인: Windows C: 여유 0바이트. Docker 빌드도 같은 이유로 중단. C: 공간 확보 후 재시도 필요 |

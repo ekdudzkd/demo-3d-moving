@@ -1,0 +1,17 @@
+.git
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+frontend
+pages
+data
+evals/runs
+.env
+*.glb
+*.obj
+*.safetensors
+*.ckpt
+*.pt
+*.pth
