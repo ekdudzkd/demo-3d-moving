@@ -36,4 +36,16 @@ def cleanup_expired(ctx: AppContext) -> int:
             session.delete(project)
             removed += 1
         session.commit()
+    _cleanup_cache(ctx, cutoff)
     return removed
+
+
+def _cleanup_cache(ctx: AppContext, cutoff) -> None:
+    """SAM 2 임베딩 캐시도 사용자 이미지에서 나온 것이라 같은 기간 뒤 지운다."""
+    cache = ctx.settings.data_dir / "cache"
+    if not cache.is_dir():
+        return
+    limit = cutoff.timestamp()
+    for path in cache.rglob("*.pt"):
+        if path.stat().st_mtime < limit:
+            path.unlink(missing_ok=True)
