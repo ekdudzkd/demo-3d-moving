@@ -1,0 +1,10 @@
+# GPU: 합성 10장(+ EVAL_DATA_DIR 비공개 그림) + GrabCut 자동 마스크 (분할 기준선) + TripoSR (mc 256)
+name: gpu-grabcut
+select:
+  roots: [synthetic, eval_data]
+segmenter: grabcut
+generator: triposr
+options:
+  mc_resolution: 256
+# TripoSR은 feed-forward라 seed가 결과를 바꾸지 않는다 (gpu-baseline-v1에서 seed 0·1·2 결과 동일)
+seeds: [0]

@@ -1,7 +1,11 @@
-import { Link, useParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+
+import { api } from "../../services/api";
 
 import { useJobReport } from "../model-viewer/useJobReport";
 import { STAGE_LABELS, formatMs } from "../generation/stages";
+import { failureInfo, pendingActions } from "./failures";
 import { CheckList, QualityTable } from "./QualityTable";
 import styles from "./ReportPage.module.css";
 
@@ -37,11 +41,42 @@ const show = (v: unknown) => (typeof v === "boolean" ? (v ? "예" : "아니오")
 export function ReportPage() {
   const { jobId = "" } = useParams();
   const { job, report, error } = useJobReport(jobId);
+  const navigate = useNavigate();
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
 
   if (error) return <div className="notice error">{error}</div>;
   if (!job || !report) return <p className="muted">불러오는 중…</p>;
   const [label, tone] = OUTCOME[report.outcome];
   const total = report.timings.stages.reduce((a, s) => a + s.elapsed_ms, 0);
+  const actions = pendingActions(report.failure_types);
+  const silhouette = report.signals?.silhouette;
+
+  const retryWithBake = async () => {
+    setRetrying(true);
+    setRetryError(null);
+    try {
+      const next = await api.retryJob(job.id, { options: { ...job.options, bake_texture: true } });
+      navigate(`/jobs/${next.id}`);
+    } catch (e) {
+      setRetryError(e instanceof Error ? e.message : String(e));
+      setRetrying(false);
+    }
+  };
+  const actionButtons = (
+    <>
+      {actions.includes("edit_mask") && (
+        <Link className="button" to={`/projects/${job.project_id}/mask`} data-testid="action-edit-mask">
+          마스크 다시 편집
+        </Link>
+      )}
+      {actions.includes("retry_bake") && (
+        <button type="button" onClick={retryWithBake} disabled={retrying} data-testid="action-retry-bake">
+          {retrying ? "다시 생성 중…" : "텍스처 굽기로 다시 생성"}
+        </button>
+      )}
+    </>
+  );
 
   return (
     <div className="stack" style={{ gap: 16 }}>
@@ -69,6 +104,13 @@ export function ReportPage() {
         <Stat label="전체 처리 시간" value={formatMs(total)} />
         <Stat label="GPU 메모리 최대" value={report.timings.peak_vram_mb == null ? "측정 안 함 (CPU)" : `${report.timings.peak_vram_mb} MB`} />
         <Stat label="충돌체" value={report.asset.collision_type === "convex_hull" ? "convex hull" : "상자"} />
+        {silhouette && (
+          <Stat
+            label="정면 모양 일치 (실루엣 IoU)"
+            value={`${Math.round(silhouette.iou * 100)}%`}
+            tone={silhouette.recall < 0.85 ? "warn" : "ok"}
+          />
+        )}
       </div>
 
       <div className={styles.cols}>
@@ -107,6 +149,15 @@ export function ReportPage() {
       <div className={styles.cols}>
         <section className="card stack">
           <h2 style={{ margin: 0 }}>실패 유형 분석</h2>
+          {actions.length > 0 && (
+            <div className="notice warn stack" style={{ gap: 6 }} data-testid="failure-actions">
+              <span>남아 있는 문제는 아래 방법으로 고칠 수 있습니다.</span>
+              <div className="row" style={{ gap: 8 }}>
+                {actionButtons}
+              </div>
+              {retryError && <span className="small">{retryError}</span>}
+            </div>
+          )}
           {report.failure_types.length === 0 ? (
             <p className="muted">발견된 실패 유형이 없습니다.</p>
           ) : (
@@ -114,6 +165,7 @@ export function ReportPage() {
               {report.failure_types.map((f) => (
                 <li key={f.type}>
                   <div className="row" style={{ gap: 6 }}>
+                    <strong>{failureInfo(f.type).label}</strong>
                     <code className={styles.ftype}>{f.type}</code>
                     {f.fixed_by_repair ? <span className="badge ok">자동 보정됨</span> : <span className="badge warn">남아 있음</span>}
                   </div>

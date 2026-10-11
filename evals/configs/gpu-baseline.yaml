@@ -1,9 +1,0 @@
-# GPU 기준선: 합성 10장 + SAM 2 자동 마스크 + TripoSR (mc 256), seed 3개
-name: gpu-baseline
-select:
-  roots: [synthetic, eval_data]
-segmenter: sam2
-generator: triposr
-options:
-  mc_resolution: 256
-seeds: [0, 1, 2]

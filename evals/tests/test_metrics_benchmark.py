@@ -64,3 +64,19 @@ def test_smoke_benchmark_mock(tmp_path, monkeypatch):
     assert [r["status"] for r in rows] == ["COMPLETED"] * 3
     config = json.loads((out / "config.json").read_text("utf-8"))
     assert config["model_info"]["name"] == "mock"
+
+
+def test_compare_two_runs(tmp_path, monkeypatch):
+    from evals import compare
+
+    monkeypatch.setattr(benchmark, "RESULTS", tmp_path)
+    cfg = benchmark.load_config(benchmark.ROOT / "evals/configs/smoke.yaml")
+    a = benchmark.run(cfg, "base")
+    b = benchmark.run({**cfg, "preprocess": {"foreground_ratio": 0.7}}, "new")
+    md = compare.compare(a, b)
+    assert "변경 조건: preprocess {} → {'foreground_ratio': 0.7}" in md
+    assert "| 사용 가능률 | 1.000 | 1.000 | = |" in md
+    assert md.count("| sample-") == 3
+    out = tmp_path / "c.md"
+    assert compare.main([str(a), str(b), "--out", str(out)]) == 0
+    assert out.read_text("utf-8") == md

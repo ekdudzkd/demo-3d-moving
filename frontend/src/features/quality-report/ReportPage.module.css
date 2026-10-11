@@ -23,6 +23,10 @@
   color: var(--error);
 }
 
+.warn {
+  color: var(--warn);
+}
+
 .cols {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -220,7 +220,7 @@ data/projects/{project_id}/
 | 4-1 | 평가셋 manifest | `evals/manifest.csv` 스키마·검증 스크립트 | 공개 샘플 manifest 검증 통과, 잘못된 행 검출 | ✅ 완료 |
 | 4-2 | benchmark + 지표 | `benchmark.py`, 마스크 IoU·실루엣 IoU·사용 가능률 등 | `benchmark.py --config evals/configs/smoke.yaml`(mock) → `summary.json` 생성 | ✅ 완료 |
 | 4-3 | 실패 유형 분류기 | 규칙 기반 분류, 보고서 연동 | 유형별 픽스처 메시가 기대 코드로 분류 | ✅ 완료 |
-| 4-4 | 비교 + 보고서 UI + CI | `compare.py`, 화면 6 실패 유형·해결 안내, CI 스모크 | 두 run 비교표 생성 → `docs/experiments.md` 반영, CI 통과 | 🟡 진행중 |
+| 4-4 | 비교 + 보고서 UI + CI | `compare.py`, 화면 6 실패 유형·해결 안내, CI 스모크 | 두 run 비교표 생성 → `docs/experiments.md` 반영, CI 통과 | ✅ 완료 |
 
 ---
 
@@ -261,3 +261,4 @@ data/projects/{project_id}/
 | 2026-10-11 | 4-1 | ✅ 완료 | `evals/manifest.csv`(13행: 공개 샘플 3 + 합성 10, 정답 마스크 10) + `evals/manifest.py`·`validate_manifest.py`. pytest(evals) 8개·ruff 통과. CLI: 실제 manifest 통과(exit 0), 잘못된 행 파일 → 동의 없는 family·저장소 내 family·license 누락·sha256 형식·group 오류 5개 검출(exit 1). EVAL_DATA_DIR 없으면 비공개 행은 건너뜀 표시. CI에 합성 그림 생성 + 검증 추가 (D-025) |
 | 2026-10-11 | 4-2 | ✅ 완료 | `evals/benchmark.py`(config YAML: 분할 grabcut·sam2·gt·none × 생성기 × 전처리 × seed) → `config.json`·`per_image.csv`·`summary.json`. 지표: 마스크 IoU·경계 F1·배경 포함률, 생성 성공률·사용 가능률·월드 로딩률(GLB 재로드+충돌체), 조각·non-manifold, 실루엣 IoU(정사영+삼각형 채우기), 시간·VRAM. pytest(evals) 12개 통과. `benchmark.py --config evals/configs/smoke.yaml`(Mock): 3장 사용 가능률 1.0, 실루엣 IoU 0.96~0.99. 처음 실루엣 IoU가 0.55~0.75로 나옴 → fillPoly가 앞·뒷면 겹침을 짝수-홀수로 지운 탓, 삼각형별로 칠하게 수정. 실루엣 함수는 보고서와 공용으로 `app/report/silhouette.py`. CI에 스모크 추가 |
 | 2026-10-11 | 4-3 | ✅ 완료 | 분류기 확장: 정면 실루엣 recall<0.85 → MISSING_PART, 마스크 면적>60%·테두리 2변 이상 → BACKGROUND_LEAK, 보고서에 `signals`(실루엣 iou·recall·precision, 마스크 면적·테두리) 기록, benchmark도 같은 신호 사용. 유형별 픽스처 테스트 14개(10개 유형 + 깨끗한 메시 무분류 + 보정 해결 표시) 통과, pytest 124개·evals 12개·1단계 스모크 통과. 3-6에서 남던 degenerate_faces 경고 → 감소 뒤 면적 0 면 제거 단계 추가. non-manifold 픽스처는 검사기가 소수 비율을 INFO로 두는 설계라 모든 면에 지느러미를 붙여 만듦 |
+| 2026-10-11 | 4-4 | ✅ 완료 | `evals/compare.py`(요약 지표·미해결 실패 유형·이미지별 변화, 좋아짐/나빠짐 표시). GPU 비교 EXP-002 GrabCut vs SAM 2(합성 10장): 사용 가능률 0.9→1.0, 마스크 IoU 0.838→0.911, 배경 포함률 0.090→0.007 → `docs/experiments.md`. 보고서 화면: 실패 유형 한글 이름, 남은 문제별 행동 버튼(마스크 다시 편집 / 텍스처 굽기로 다시 생성), 정면 모양 일치(실루엣 IoU) 표시. 실서버 확인(Edge): 막대 사람 → 59% 경고색 + 마스크 편집 링크, 페이지 오류 없음. vitest 39개·typecheck, pytest 124개, evals 13개 통과. CI(GitHub Actions)는 gh 미인증으로 결과 직접 확인 못 함. 남은 점: 감소 없는 메시에서 면적 0 면 1개가 검사기 병합 기준 차이로 남음 |

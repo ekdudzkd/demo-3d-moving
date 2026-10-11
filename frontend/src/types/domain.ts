@@ -127,6 +127,12 @@ export interface Report {
   };
   repair_steps: { name: string; applied: boolean; rolled_back: boolean; reason: string; elapsed_ms: number }[];
   failure_types: FailureType[];
+  /** 실패 분류 신호 (4-3 이후 보고서) */
+  signals?: {
+    silhouette?: { iou: number; recall: number; precision: number };
+    mask_coverage?: number;
+    mask_border_sides?: number;
+  };
   asset: { asset_id: string; collision_type: string };
   downloads: Record<string, string>;
 }
