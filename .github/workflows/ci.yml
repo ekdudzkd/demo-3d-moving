@@ -56,6 +56,10 @@ jobs:
           pytest -q evals
           python scripts/make_spike_drawings.py
           python evals/validate_manifest.py
+      - name: 평가 benchmark 스모크 (공개 샘플 + Mock)
+        run: |
+          python evals/benchmark.py --config evals/configs/smoke.yaml --run-id ci-smoke
+          python -c "import json; s=json.load(open('evals/generation-results/ci-smoke/summary.json')); assert s['usable_rate']==1.0, s; print(s)"
       - name: 1단계 스모크 (서버+워커 실제 기동)
         run: PY=python bash scripts/smoke_stage1.sh
       - name: OpenAPI 스키마가 프론트 계약과 같은지

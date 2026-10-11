@@ -218,7 +218,7 @@ data/projects/{project_id}/
 | ID | 작업 | 산출물 | 스모크 테스트 | 상태 |
 |---|---|---|---|---|
 | 4-1 | 평가셋 manifest | `evals/manifest.csv` 스키마·검증 스크립트 | 공개 샘플 manifest 검증 통과, 잘못된 행 검출 | ✅ 완료 |
-| 4-2 | benchmark + 지표 | `benchmark.py`, 마스크 IoU·실루엣 IoU·사용 가능률 등 | `benchmark.py --config evals/configs/smoke.yaml`(mock) → `summary.json` 생성 | 🟡 진행중 |
+| 4-2 | benchmark + 지표 | `benchmark.py`, 마스크 IoU·실루엣 IoU·사용 가능률 등 | `benchmark.py --config evals/configs/smoke.yaml`(mock) → `summary.json` 생성 | ✅ 완료 |
 | 4-3 | 실패 유형 분류기 | 규칙 기반 분류, 보고서 연동 | 유형별 픽스처 메시가 기대 코드로 분류 | ⬜ 대기 |
 | 4-4 | 비교 + 보고서 UI + CI | `compare.py`, 화면 6 실패 유형·해결 안내, CI 스모크 | 두 run 비교표 생성 → `docs/experiments.md` 반영, CI 통과 | ⬜ 대기 |
 
@@ -259,3 +259,4 @@ data/projects/{project_id}/
 | 2026-10-11 | 3-5 | ✅ 완료 | pytest 106개·ruff 통과. 단위: 100k 면 텍스처 구 → 보정 50k 이하(텍스처 색을 정점 색으로 유지), 50k 이하 텍스처 메시 → GLB에 이미지·TEXCOORD_0·baseColorTexture·metallic 0. `/api/health/models`에 남은 VRAM·가중치 캐시 여부·최근 완료 job 실측(생성 시간 중앙값·최대, 최대 VRAM, 사용 가능 수) 추가. 스모크(TripoSR 베이크 job): raw 87k → 베이크 전 감소 50k → 1024 텍스처 → repaired.glb 텍스처 포함 49,998면 USABLE. 발견·수정: UV 섬마다 정점이 나뉜 메시에서 작은 조각 제거가 UV 섬을 지워 면 32% 손실(50k→34k) → 위치 병합 연결성으로 판단, 구멍 채우기가 UV 이음새에 가짜 면 추가 → 텍스처 메시는 건너뜀, trimesh 머티리얼이 금속 기본값으로 어둡게 보이던 문제 (D-023) |
 | 2026-10-11 | 3-6 | ✅ 완료 | 합성 그림 10장(정답 마스크 포함, `scripts/make_spike_drawings.py`) × SAM 2 자동 마스크 + TripoSR, `scripts/spike_triposr.py`로 실서버·워커 실행. v1: 완료 8/10(윤곽선·막대 그림 입력 거부), 책상 사진 마스크 IoU 0.144, 보정 후 조각 증가 5장 → 3건 수정(D-024) → v2: 완료·사용 가능 10/10, IoU 평균 0.911, 생성 5.0~5.6초·VRAM 2379MiB. pytest 110개·vitest 37개·typecheck 통과. 결과표 `docs/experiments.md` EXP-001. 실제 손그림은 아직 없음 |
 | 2026-10-11 | 4-1 | ✅ 완료 | `evals/manifest.csv`(13행: 공개 샘플 3 + 합성 10, 정답 마스크 10) + `evals/manifest.py`·`validate_manifest.py`. pytest(evals) 8개·ruff 통과. CLI: 실제 manifest 통과(exit 0), 잘못된 행 파일 → 동의 없는 family·저장소 내 family·license 누락·sha256 형식·group 오류 5개 검출(exit 1). EVAL_DATA_DIR 없으면 비공개 행은 건너뜀 표시. CI에 합성 그림 생성 + 검증 추가 (D-025) |
+| 2026-10-11 | 4-2 | ✅ 완료 | `evals/benchmark.py`(config YAML: 분할 grabcut·sam2·gt·none × 생성기 × 전처리 × seed) → `config.json`·`per_image.csv`·`summary.json`. 지표: 마스크 IoU·경계 F1·배경 포함률, 생성 성공률·사용 가능률·월드 로딩률(GLB 재로드+충돌체), 조각·non-manifold, 실루엣 IoU(정사영+삼각형 채우기), 시간·VRAM. pytest(evals) 12개 통과. `benchmark.py --config evals/configs/smoke.yaml`(Mock): 3장 사용 가능률 1.0, 실루엣 IoU 0.96~0.99. 처음 실루엣 IoU가 0.55~0.75로 나옴 → fillPoly가 앞·뒷면 겹침을 짝수-홀수로 지운 탓, 삼각형별로 칠하게 수정. 실루엣 함수는 보고서와 공용으로 `app/report/silhouette.py`. CI에 스모크 추가 |

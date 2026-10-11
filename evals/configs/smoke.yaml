@@ -1,0 +1,7 @@
+# CI 스모크: 공개 샘플 3장 + GrabCut + Mock 생성기. GPU·모델 다운로드 없음
+name: smoke
+select:
+  roots: [repo]
+segmenter: grabcut
+generator: mock
+seeds: [0]
