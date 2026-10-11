@@ -219,7 +219,7 @@ data/projects/{project_id}/
 |---|---|---|---|---|
 | 4-1 | 평가셋 manifest | `evals/manifest.csv` 스키마·검증 스크립트 | 공개 샘플 manifest 검증 통과, 잘못된 행 검출 | ✅ 완료 |
 | 4-2 | benchmark + 지표 | `benchmark.py`, 마스크 IoU·실루엣 IoU·사용 가능률 등 | `benchmark.py --config evals/configs/smoke.yaml`(mock) → `summary.json` 생성 | ✅ 완료 |
-| 4-3 | 실패 유형 분류기 | 규칙 기반 분류, 보고서 연동 | 유형별 픽스처 메시가 기대 코드로 분류 | ⬜ 대기 |
+| 4-3 | 실패 유형 분류기 | 규칙 기반 분류, 보고서 연동 | 유형별 픽스처 메시가 기대 코드로 분류 | 🟡 진행중 |
 | 4-4 | 비교 + 보고서 UI + CI | `compare.py`, 화면 6 실패 유형·해결 안내, CI 스모크 | 두 run 비교표 생성 → `docs/experiments.md` 반영, CI 통과 | ⬜ 대기 |
 
 ---
