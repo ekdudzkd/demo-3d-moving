@@ -208,7 +208,7 @@ data/projects/{project_id}/
 |---|---|---|---|---|
 | 3-1 | GPU 워커 환경 | `docker/gpu-worker.Dockerfile`, WSL2 설치 문서, 가중치 캐시 볼륨 | 컨테이너에서 `torch.cuda.is_available()` true, TripoSR·SAM2 import 성공 | ✅ 완료 |
 | 3-2 | Sam2Segmenter | 임베딩 캐시, 누적 프롬프트, multimask 선택, 종이 crop·hole fill | 샘플 3장 segment 성공, 재예측 지연 측정 기록 | ✅ 완료 |
-| 3-3 | TripoSRAdapter | 회색 합성 512, mc 해상도, 텍스처 베이크, 시간·VRAM 측정, OOM 재시도 | `pytest -m gpu` 통과, 샘플 → `raw.obj` 생성·측정값 기록 | 🟡 진행중 |
+| 3-3 | TripoSRAdapter | 회색 합성 512, mc 해상도, 텍스처 베이크, 시간·VRAM 측정, OOM 재시도 | `pytest -m gpu` 통과, 샘플 → `raw.obj` 생성·측정값 기록 | ✅ 완료 |
 | 3-4 | StableFast3DAdapter | 플래그·라이선스 동의 시에만 등록 | 플래그 OFF면 미등록, ON이면 샘플 1장 생성 | ⬜ 대기 |
 | 3-5 | 보정 강화 + 모델 상태 | quadric 감소, 텍스처 GLB 내장, `/health/models` 실측 | 100k 면 메시 → 50k 이하, GLB 텍스처 포함 확인 | ⬜ 대기 |
 | 3-6 | 그림 10장 스파이크 | 스파이크 스크립트, `docs/experiments.md` 기록 | 10장 실행 완료, 성공/사용가능/시간/VRAM 표 기록 | ⬜ 대기 |
@@ -255,3 +255,4 @@ data/projects/{project_id}/
 | 2026-10-11 | 3-1 | 🟡 진행중 (실패) | 점검 스크립트 `scripts/check_gpu_env.py`·`pytest -m gpu` 테스트·.dockerignore 추가, Dockerfile uv 설치 수정. WSL venv에 torch 없었음(이전 설치 중단) → 재설치 중 uv 캐시 휠 손상·Bus error·ext4 읽기 전용 반복. 원인: Windows C: 여유 0바이트. Docker 빌드도 같은 이유로 중단. C: 공간 확보 후 재시도 필요 |
 | 2026-10-11 | 3-1 | ✅ 완료 | C: 공간 확보 후 재시도. WSL venv 재생성 → `check_gpu_env.py` 4항목 통과(torch 2.5.1+cu124 cuda True, RTX 4060, SAM 2·TripoSR import, marching cubes 대체), `pytest -m gpu` 2개·전체 80개 통과. Docker: base 이미지를 cuda base로 축소, uv 0.13.0, SAM 2 빌드 격리 끔(torch 중복 다운로드 2.5GB 제거) → 빌드 성공 10.2GB, `docker run --gpus all` 점검 4항목 통과. 도중 C: 0바이트로 Docker 엔진 다운 1회 |
 | 2026-10-11 | 3-2 | ✅ 완료 | 새 개발 PC(RTX 4050 6GB)에서 `setup-gpu-env.sh`로 WSL venv 재구성 → `check_gpu_env.py` 4항목 통과. pytest 92개·`pytest -m gpu` 6개(샘플 3장 분할·메모리/디스크 캐시)·ruff 통과. `scripts/smoke_sam2.sh`(SEGMENTER=sam2 서버): 샘플 3장 v1 자동 제안 coverage 0.13~0.15, 첫 임베딩 포함 0.5~1.4초 → 누적 재예측(점1·점2·점2+박스) 66~115ms(디코더 40~60ms). 처음엔 재예측 150~560ms — 전경 추정을 원본 해상도로 매번 계산한 탓 → 512 축소본 계산·같은 이미지 특징 재업로드 생략으로 수정 (D-021) |
+| 2026-10-11 | 3-3 | ✅ 완료 | pytest 100개·`pytest -m gpu` 7개·mesh-ready-check 43개·ruff 통과. `scripts/smoke_triposr.sh`(SAM 2 + TripoSR 서버·워커): 샘플 3장 COMPLETED, raw 52.9k~90.3k 면 → 보정 50k, 생성 5.8~7.3초(mc 256), 모델 로드 7초(ext4 캐시, /mnt/c면 68초), 최대 VRAM 2379MiB(RTX 4050 6GB). 텍스처 베이크 job: 1024 텍스처 생성, 39초(llvmpipe 래스터). 정면 실루엣 IoU 0.93~0.97(좌우 반전 0.80)로 좌표 변환 확인. 발견·수정: TripoSR 베이크가 CPU 텐서로 GPU 모델 질의(원본 버그), chunk 8192→65536(추출 20→11초, VRAM 동일), Docker 가중치가 볼륨 밖에 저장되던 문제. 측정 중 노트북 GPU가 SW 전력 제한(14W)에 걸려 같은 작업이 2~5배 느린 구간 있음 (D-022) |

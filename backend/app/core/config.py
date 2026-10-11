@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     model_cache_dir: Path = Path("./data/models")
     sam2_checkpoint: str = "facebook/sam2.1-hiera-small"
     triposr_repo_dir: Path | None = None
+    # 표면 추출 청크. 작을수록 VRAM을 덜 쓰고 느리다. 65536: RTX 4050에서 8192보다 2배 빠르고 VRAM 같음
+    triposr_chunk_size: int = 65536
 
     @property
     def resolved_database_url(self) -> str:

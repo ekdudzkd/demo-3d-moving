@@ -34,8 +34,8 @@ if [ ! -d "$TRIPOSR_DIR/.git" ]; then
   git clone -q https://github.com/VAST-AI-Research/TripoSR.git "$TRIPOSR_DIR"
 fi
 git -C "$TRIPOSR_DIR" fetch -q origin && git -C "$TRIPOSR_DIR" checkout -q "$TRIPOSR_COMMIT"
-# TripoSR requirements 중 실제로 쓰는 것만 (rembg·gradio·torchmcubes 제외)
-uv pip install -q -p "$VENV" omegaconf==2.3.0 einops==0.7.0 transformers==4.35.0 huggingface-hub scikit-image xatlas==0.0.9 imageio
+# TripoSR requirements 중 실제로 쓰는 것만 (rembg·gradio·torchmcubes 제외). moderngl은 텍스처 베이크용(GPU 없으면 llvmpipe)
+uv pip install -q -p "$VENV" omegaconf==2.3.0 einops==0.7.0 transformers==4.35.0 huggingface-hub scikit-image xatlas==0.0.9 imageio moderngl==5.11.1
 
 "$VENV/bin/python" - <<PY
 import torch
@@ -50,5 +50,6 @@ cat <<EOF
   SEGMENTER=sam2
   GENERATOR=triposr
   TRIPOSR_REPO_DIR=$TRIPOSR_DIR
+  MODEL_CACHE_DIR=$HOME/.cache/d2w/models   # WSL이면 /mnt/c 아래보다 로드가 빠르다
 실행: PY=$VENV/bin/python bash scripts/dev-backend.sh
 EOF
