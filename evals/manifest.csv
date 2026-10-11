@@ -1,0 +1,14 @@
+id,group,category,difficulty,root,file,gt_mask,source,consent,license,sha256,notes
+sample-apple,A,사물,easy,repo,assets/samples/apple.png,,team,not_required,CC0-1.0,f003bd3d6a38c6fba3493cef6f96a9bf719fa8dcbc0184cf1967599dd4bb31bf,공개 샘플 (scripts/make_samples.py)
+sample-car,A,탈것,normal,repo,assets/samples/car.png,,team,not_required,CC0-1.0,f7972b8e99b5b04ab412209e030dcc009d7b104a90fa29280f4808df5ab13629,공개 샘플
+sample-star,A,사람/캐릭터,normal,repo,assets/samples/star.png,,team,not_required,CC0-1.0,475df2c258a857a1e7bf9140a97a4e2770360dd6b8ab216fc982d017b179e6b2,공개 샘플
+syn-apple,A,사물,easy,synthetic,apple.png,apple_mask.png,synthetic,not_required,CC0-1.0,,scripts/make_spike_drawings.py
+syn-car,A,탈것,normal,synthetic,car.png,car_mask.png,synthetic,not_required,CC0-1.0,,
+syn-star,A,사람/캐릭터,normal,synthetic,star.png,star_mask.png,synthetic,not_required,CC0-1.0,,
+syn-fish,A,동물,normal,synthetic,fish.png,fish_mask.png,synthetic,not_required,CC0-1.0,,꼬리 돌출
+syn-house,A,식물/건물,easy,synthetic,house.png,house_mask.png,synthetic,not_required,CC0-1.0,,
+syn-outline-cat,C,동물,hard,synthetic,outline_cat.png,outline_cat_mask.png,synthetic,not_required,CC0-1.0,,윤곽선만 (내부 미채색)
+syn-crayon-duck,C,동물,hard,synthetic,crayon_duck.png,crayon_duck_mask.png,synthetic,not_required,CC0-1.0,,배경 유사색 (저대비)
+syn-stick-person,C,사람/캐릭터,hard,synthetic,stick_person.png,stick_person_mask.png,synthetic,not_required,CC0-1.0,,가는 선
+syn-two-objects,C,사물,hard,synthetic,two_objects.png,two_objects_mask.png,synthetic,not_required,CC0-1.0,,여러 객체 (정답은 두 물체 합)
+syn-desk-photo,C,사물,hard,synthetic,desk_photo.png,desk_photo_mask.png,synthetic,not_required,CC0-1.0,,책상 위 종이 사진 (회전·그림자)

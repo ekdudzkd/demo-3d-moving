@@ -50,6 +50,12 @@ jobs:
       - name: pytest (API 응답·작업 상태 스키마 포함)
         working-directory: backend
         run: pytest -q
+      - name: 평가셋 manifest (합성 그림 생성 후 파일까지 검증)
+        run: |
+          ruff check evals && ruff format --check evals
+          pytest -q evals
+          python scripts/make_spike_drawings.py
+          python evals/validate_manifest.py
       - name: 1단계 스모크 (서버+워커 실제 기동)
         run: PY=python bash scripts/smoke_stage1.sh
       - name: OpenAPI 스키마가 프론트 계약과 같은지
