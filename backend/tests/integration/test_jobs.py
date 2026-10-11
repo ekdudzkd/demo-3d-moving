@@ -204,3 +204,16 @@ def test_cancelled_queued_job_has_error_info(client):
     job = new_job(client, confirmed_project(client))
     body = client.post(f"/api/jobs/{job['id']}/cancel").json()
     assert body["error"]["code"] == "CANCELLED" and body["error"]["retryable"]
+
+
+def test_models_endpoint_reports_measured_stats(client, settings):
+    before = {a["name"]: a for a in client.get("/api/health/models").json()["adapters"]}
+    assert before["mock"]["measured"] is None
+    new_job(client, confirmed_project(client))
+    assert run_pending(worker_ctx(settings)) == 1
+
+    after = {a["name"]: a for a in client.get("/api/health/models").json()["adapters"]}
+    m = after["mock"]["measured"]
+    assert m["recent_jobs"] == 1 and m["usable"] == 1
+    assert m["generation_ms_median"] is not None and m["generation_ms_median"] >= 0
+    assert after["triposr"]["measured"] is None

@@ -210,7 +210,7 @@ data/projects/{project_id}/
 | 3-2 | Sam2Segmenter | 임베딩 캐시, 누적 프롬프트, multimask 선택, 종이 crop·hole fill | 샘플 3장 segment 성공, 재예측 지연 측정 기록 | ✅ 완료 |
 | 3-3 | TripoSRAdapter | 회색 합성 512, mc 해상도, 텍스처 베이크, 시간·VRAM 측정, OOM 재시도 | `pytest -m gpu` 통과, 샘플 → `raw.obj` 생성·측정값 기록 | ✅ 완료 |
 | 3-4 | StableFast3DAdapter | 플래그·라이선스 동의 시에만 등록 | 플래그 OFF면 미등록, ON이면 샘플 1장 생성 | ⬜ 대기 |
-| 3-5 | 보정 강화 + 모델 상태 | quadric 감소, 텍스처 GLB 내장, `/health/models` 실측 | 100k 면 메시 → 50k 이하, GLB 텍스처 포함 확인 | 🟡 진행중 |
+| 3-5 | 보정 강화 + 모델 상태 | quadric 감소, 텍스처 GLB 내장, `/health/models` 실측 | 100k 면 메시 → 50k 이하, GLB 텍스처 포함 확인 | ✅ 완료 |
 | 3-6 | 그림 10장 스파이크 | 스파이크 스크립트, `docs/experiments.md` 기록 | 10장 실행 완료, 성공/사용가능/시간/VRAM 표 기록 | ⬜ 대기 |
 
 ### 4단계 — 평가·실패 분류·개선 비교
@@ -256,3 +256,4 @@ data/projects/{project_id}/
 | 2026-10-11 | 3-1 | ✅ 완료 | C: 공간 확보 후 재시도. WSL venv 재생성 → `check_gpu_env.py` 4항목 통과(torch 2.5.1+cu124 cuda True, RTX 4060, SAM 2·TripoSR import, marching cubes 대체), `pytest -m gpu` 2개·전체 80개 통과. Docker: base 이미지를 cuda base로 축소, uv 0.13.0, SAM 2 빌드 격리 끔(torch 중복 다운로드 2.5GB 제거) → 빌드 성공 10.2GB, `docker run --gpus all` 점검 4항목 통과. 도중 C: 0바이트로 Docker 엔진 다운 1회 |
 | 2026-10-11 | 3-2 | ✅ 완료 | 새 개발 PC(RTX 4050 6GB)에서 `setup-gpu-env.sh`로 WSL venv 재구성 → `check_gpu_env.py` 4항목 통과. pytest 92개·`pytest -m gpu` 6개(샘플 3장 분할·메모리/디스크 캐시)·ruff 통과. `scripts/smoke_sam2.sh`(SEGMENTER=sam2 서버): 샘플 3장 v1 자동 제안 coverage 0.13~0.15, 첫 임베딩 포함 0.5~1.4초 → 누적 재예측(점1·점2·점2+박스) 66~115ms(디코더 40~60ms). 처음엔 재예측 150~560ms — 전경 추정을 원본 해상도로 매번 계산한 탓 → 512 축소본 계산·같은 이미지 특징 재업로드 생략으로 수정 (D-021) |
 | 2026-10-11 | 3-3 | ✅ 완료 | pytest 100개·`pytest -m gpu` 7개·mesh-ready-check 43개·ruff 통과. `scripts/smoke_triposr.sh`(SAM 2 + TripoSR 서버·워커): 샘플 3장 COMPLETED, raw 52.9k~90.3k 면 → 보정 50k, 생성 5.8~7.3초(mc 256), 모델 로드 7초(ext4 캐시, /mnt/c면 68초), 최대 VRAM 2379MiB(RTX 4050 6GB). 텍스처 베이크 job: 1024 텍스처 생성, 39초(llvmpipe 래스터). 정면 실루엣 IoU 0.93~0.97(좌우 반전 0.80)로 좌표 변환 확인. 발견·수정: TripoSR 베이크가 CPU 텐서로 GPU 모델 질의(원본 버그), chunk 8192→65536(추출 20→11초, VRAM 동일), Docker 가중치가 볼륨 밖에 저장되던 문제. 측정 중 노트북 GPU가 SW 전력 제한(14W)에 걸려 같은 작업이 2~5배 느린 구간 있음 (D-022) |
+| 2026-10-11 | 3-5 | ✅ 완료 | pytest 106개·ruff 통과. 단위: 100k 면 텍스처 구 → 보정 50k 이하(텍스처 색을 정점 색으로 유지), 50k 이하 텍스처 메시 → GLB에 이미지·TEXCOORD_0·baseColorTexture·metallic 0. `/api/health/models`에 남은 VRAM·가중치 캐시 여부·최근 완료 job 실측(생성 시간 중앙값·최대, 최대 VRAM, 사용 가능 수) 추가. 스모크(TripoSR 베이크 job): raw 87k → 베이크 전 감소 50k → 1024 텍스처 → repaired.glb 텍스처 포함 49,998면 USABLE. 발견·수정: UV 섬마다 정점이 나뉜 메시에서 작은 조각 제거가 UV 섬을 지워 면 32% 손실(50k→34k) → 위치 병합 연결성으로 판단, 구멍 채우기가 UV 이음새에 가짜 면 추가 → 텍스처 메시는 건너뜀, trimesh 머티리얼이 금속 기본값으로 어둡게 보이던 문제 (D-023) |

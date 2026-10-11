@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app import __version__
 from app.core.context import AppContext
+from app.generation.measured import measured_stats
 from app.generation.registry import describe_all
 
 from .deps import get_ctx
@@ -26,4 +27,8 @@ def health(ctx: AppContext = Depends(get_ctx)) -> dict:
 
 @router.get("/models")
 def models(ctx: AppContext = Depends(get_ctx)) -> dict:
-    return {"default": ctx.settings.generator, "adapters": describe_all(ctx.settings)}
+    adapters = describe_all(ctx.settings)
+    with ctx.session() as session:
+        for entry in adapters:
+            entry["measured"] = measured_stats(session, entry["name"])
+    return {"default": ctx.settings.generator, "adapters": adapters}

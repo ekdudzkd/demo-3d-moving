@@ -97,10 +97,11 @@ class TripoSRAdapter(ImageTo3DAdapter):
         except ImportError:
             return EnvironmentStatus(ok=False, device="-", problems=["torch 미설치"])
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        gpu_name = vram = None
+        gpu_name = vram = free = None
         if device == "cuda":
             gpu_name = torch.cuda.get_device_name(0)
-            vram = torch.cuda.get_device_properties(0).total_memory // 2**20
+            free_b, total_b = torch.cuda.mem_get_info()
+            vram, free = total_b // 2**20, free_b // 2**20
             if vram < self.get_model_info().min_vram_mb:
                 problems.append(f"VRAM {vram}MiB < 권장 {self.get_model_info().min_vram_mb}MiB")
         else:
@@ -108,8 +109,24 @@ class TripoSRAdapter(ImageTo3DAdapter):
         if not (self.repo_dir / "tsr").is_dir():
             problems.append(f"TripoSR 소스 없음: {self.repo_dir} (scripts/setup-gpu-env.sh)")
         return EnvironmentStatus(
-            ok=not problems, device=device, gpu_name=gpu_name, vram_total_mb=vram, problems=problems
+            ok=not problems,
+            device=device,
+            gpu_name=gpu_name,
+            vram_total_mb=vram,
+            vram_free_mb=free,
+            weights_cached=self.weights_cached(),
+            problems=problems,
         )
+
+    def weights_cached(self) -> bool:
+        try:
+            from huggingface_hub import try_to_load_from_cache
+        except ImportError:
+            return False
+        path = try_to_load_from_cache(
+            WEIGHTS_REPO, "model.ckpt", cache_dir=str(self.settings.model_cache_dir / "hf")
+        )
+        return isinstance(path, str)
 
     # ---------- 로드 ----------
 
@@ -250,6 +267,12 @@ class TripoSRAdapter(ImageTo3DAdapter):
         texture = None
         warnings: list[str] = []
         if options.bake_texture and len(mesh.faces):
+            budget = self.settings.face_budget
+            if len(mesh.faces) > budget:
+                # 보정 단계의 quadric 감소는 UV를 잃으므로 굽기 전에 면 예산까지 줄인다 (D-023)
+                t = time.perf_counter()
+                mesh = mesh.simplify_quadric_decimation(face_count=budget)
+                tick("decimate_before_bake", t)
             t = time.perf_counter()
             try:
                 mesh, texture = self._bake(mesh, scene_codes[0], options.texture_resolution)

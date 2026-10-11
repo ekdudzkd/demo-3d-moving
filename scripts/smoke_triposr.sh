@@ -61,7 +61,21 @@ for w in m['warnings']: print('          경고:', w)" || fail "$name 보고서 
   if [[ $name == car+bake ]]; then
     dir=$(ls -d "$DATA_DIR"/projects/*/jobs/"$job")
     [[ -s $dir/generation/texture.png ]] || fail "텍스처 파일 없음"
-    echo "          texture.png $("$PY" -c "from PIL import Image; print(Image.open('$dir/generation/texture.png').size)")"
+    # 3-5: 베이크 전 감소로 면 예산 이하, 보정·GLB까지 텍스처 유지
+    "$PY" - "$dir" <<'PY' || fail "텍스처 GLB 확인 실패"
+import json, struct, sys
+from pathlib import Path
+from PIL import Image
+d = Path(sys.argv[1])
+raw = (d / "export/repaired.glb").read_bytes()
+g = json.loads(raw[20 : 20 + struct.unpack("<I", raw[12:16])[0]])
+prim = g["meshes"][0]["primitives"][0]
+pbr = g["materials"][prim["material"]]["pbrMetallicRoughness"]
+assert "TEXCOORD_0" in prim["attributes"] and "baseColorTexture" in pbr, g["materials"]
+faces = g["accessors"][prim["indices"]]["count"] // 3
+assert faces <= 50000, faces
+print(f"          texture.png {Image.open(d / 'generation/texture.png').size} → repaired.glb 텍스처 포함, {faces} 면, metallic {pbr['metallicFactor']}")
+PY
   fi
 done
 echo "✓ 샘플 3장 TripoSR 생성 → raw.obj → 검사·보정·GLB 완료"

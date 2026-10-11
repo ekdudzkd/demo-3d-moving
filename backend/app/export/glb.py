@@ -41,22 +41,28 @@ def write_glb(mesh: trimesh.Trimesh, path: Path) -> None:
 
 
 def _ensure_material(glb: bytes) -> bytes:
-    """머티리얼이 없는 primitive에 비금속 기본 머티리얼을 넣는다."""
+    """머티리얼이 없는 primitive에 비금속 기본 머티리얼을 넣고, 있는 머티리얼(텍스처)도 비금속으로 맞춘다."""
     magic, version, _ = struct.unpack("<4sII", glb[:12])
     json_len, json_type = struct.unpack("<I4s", glb[12:20])
     assert magic == b"glTF" and json_type == b"JSON"
     gltf = json.loads(glb[20 : 20 + json_len])
     rest = glb[20 + json_len :]
 
+    materials = gltf.get("materials", [])  # glTF 배열은 비어 있으면 안 되므로 필요할 때만 만든다
+    for mat in materials:
+        # trimesh가 쓴 머티리얼은 metallicFactor가 없어 glTF 기본값 1.0(금속)으로 어둡게 보인다
+        pbr = mat.setdefault("pbrMetallicRoughness", {})
+        pbr.setdefault("metallicFactor", 0.0)
+        pbr.setdefault("roughnessFactor", MATERIAL["pbrMetallicRoughness"]["roughnessFactor"])
+        mat.setdefault("doubleSided", True)
     missing = [
         p for mesh in gltf.get("meshes", []) for p in mesh["primitives"] if "material" not in p
     ]
-    if not missing:
-        return glb
-    materials = gltf.setdefault("materials", [])
-    materials.append(MATERIAL)
-    for p in missing:
-        p["material"] = len(materials) - 1
+    if missing:
+        materials.append(MATERIAL)
+        gltf["materials"] = materials
+        for p in missing:
+            p["material"] = len(materials) - 1
 
     chunk = json.dumps(gltf, separators=(",", ":")).encode()
     chunk += b" " * (-len(chunk) % 4)

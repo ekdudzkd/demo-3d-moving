@@ -16,6 +16,7 @@ import numpy as np
 import trimesh
 from scipy.spatial import cKDTree
 
+from app.export.glb import write_glb
 from mesh_ready_check import Thresholds, inspect_mesh, load_mesh
 
 from .inspect import inspect_file
@@ -69,13 +70,22 @@ def remove_degenerate_faces(m: trimesh.Trimesh, _: int) -> trimesh.Trimesh:
 
 
 def remove_small_components(m: trimesh.Trimesh, _: int) -> trimesh.Trimesh:
-    parts = m.split(only_watertight=False)
-    if len(parts) <= 1:
+    # 연결성은 위치만으로 병합한 사본에서 판단한다. 텍스처 메시는 UV 섬마다 정점이 나뉘어 있어
+    # 그대로 split하면 UV 섬을 작은 조각으로 보고 지운다 (D-014와 같은 이유)
+    merged = m.copy()
+    merged.merge_vertices(merge_tex=True, merge_norm=True)
+    labels = trimesh.graph.connected_component_labels(
+        merged.face_adjacency, node_count=len(merged.faces)
+    )
+    sizes = np.bincount(labels)
+    if len(sizes) <= 1:
         return m
-    total = sum(len(p.faces) for p in parts)
-    largest = max(parts, key=lambda p: len(p.faces))
-    keep = [p for p in parts if p is largest or len(p.faces) >= SMALL_COMPONENT_RATIO * total]
-    return trimesh.util.concatenate(keep)
+    keep = (sizes >= SMALL_COMPONENT_RATIO * len(labels)) | (
+        np.arange(len(sizes)) == sizes.argmax()
+    )
+    m.update_faces(keep[labels])
+    m.remove_unreferenced_vertices()
+    return m
 
 
 def fix_normals(m: trimesh.Trimesh, _: int) -> trimesh.Trimesh:
@@ -84,7 +94,10 @@ def fix_normals(m: trimesh.Trimesh, _: int) -> trimesh.Trimesh:
 
 
 def fill_small_holes(m: trimesh.Trimesh, _: int) -> trimesh.Trimesh:
-    # trimesh는 삼각형·사각형 크기의 작은 구멍만 채운다. 큰 구멍은 보정 대상이 아님
+    # trimesh는 삼각형·사각형 크기의 작은 구멍만 채운다. 큰 구멍은 보정 대상이 아님.
+    # 텍스처 메시는 UV 이음새가 열린 경계로 보여 가짜 면이 생기고, 새 면에 UV도 줄 수 없어 건너뛴다
+    if _has_texture(m):
+        return m
     trimesh.repair.fill_holes(m)
     return m
 
@@ -92,6 +105,10 @@ def fill_small_holes(m: trimesh.Trimesh, _: int) -> trimesh.Trimesh:
 def decimate(m: trimesh.Trimesh, budget: int) -> trimesh.Trimesh:
     if len(m.faces) <= budget:
         return m
+    if _has_texture(m):
+        # quadric 감소는 UV를 보존하지 못한다. 텍스처를 정점 색으로 옮겨 색은 유지한다.
+        # TripoSR 베이크는 감소 후에 굽기 때문에 보통 여기까지 오지 않는다 (D-023)
+        m.visual = m.visual.to_color()
     colors = _vertex_colors(m)
     out = m.simplify_quadric_decimation(face_count=budget)
     if colors is not None:
@@ -112,6 +129,17 @@ def center_and_ground(m: trimesh.Trimesh, _: int) -> trimesh.Trimesh:
     lo, hi = m.bounds
     m.apply_translation([-(lo[0] + hi[0]) / 2, -lo[1], -(lo[2] + hi[2]) / 2])
     return m
+
+
+def _has_texture(m: trimesh.Trimesh) -> bool:
+    v = m.visual
+    if v is None or v.kind != "texture" or getattr(v, "uv", None) is None:
+        return False
+    material = getattr(v, "material", None)
+    return material is not None and (
+        getattr(material, "image", None) is not None
+        or getattr(material, "baseColorTexture", None) is not None
+    )
 
 
 def _vertex_colors(m: trimesh.Trimesh) -> np.ndarray | None:
@@ -173,8 +201,13 @@ def repair_file(raw_path: Path, out_dir: Path, face_budget: int) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     mesh, _ = load_mesh(raw_path)
     repaired, steps = repair_mesh(mesh, face_budget)
-    repaired_path = out_dir / "repaired.ply"
-    repaired.export(repaired_path)
+    # 텍스처는 PLY에 담을 수 없어 GLB로, 정점 색은 GLB로 다시 읽으면 trimesh가 COLOR_0을 버려서 PLY로 (D-019)
+    if _has_texture(repaired):
+        repaired_path = out_dir / "repaired.glb"
+        write_glb(repaired, repaired_path)
+    else:
+        repaired_path = out_dir / "repaired.ply"
+        repaired.export(repaired_path)
     report = inspect_file(repaired_path, face_budget, TARGET_SIZE)
     (out_dir / "repair_steps.json").write_text(
         json.dumps(steps, ensure_ascii=False, indent=2), "utf-8"

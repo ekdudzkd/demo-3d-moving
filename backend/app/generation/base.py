@@ -32,6 +32,10 @@ class EnvironmentStatus(BaseModel):
     device: str
     gpu_name: str | None = None
     vram_total_mb: int | None = None
+    vram_free_mb: int | None = None  # 점검 시점 실측
+    weights_cached: bool | None = (
+        None  # 가중치가 MODEL_CACHE_DIR에 있으면 true (없으면 첫 생성 때 받음)
+    )
     problems: list[str] = Field(default_factory=list)
 
 
