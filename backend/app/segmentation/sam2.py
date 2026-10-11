@@ -17,6 +17,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from scipy import ndimage
 
 from app.core.config import Settings
 from app.input.foreground import alpha_is_meaningful, bbox, estimate_foreground
@@ -53,6 +54,14 @@ class Sam2Timing:
 
 def find_paper(rgb: np.ndarray) -> tuple[int, int, int, int] | None:
     """사진 안의 흰 종이 영역 bbox. 종이가 이미지 대부분이거나 없으면 None (자를 필요 없음)."""
+    region = paper_region(rgb)
+    return None if region is None else region[0]
+
+
+def paper_region(
+    rgb: np.ndarray,
+) -> tuple[tuple[int, int, int, int], np.ndarray, np.ndarray] | None:
+    """(종이 bbox, 종이 마스크(그림 포함), 종이 색). 종이가 이미지 대부분이거나 없으면 None."""
     h, w = rgb.shape[:2]
     hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
     v, s = hsv[..., 2].astype(np.int16), hsv[..., 1].astype(np.int16)
@@ -70,7 +79,10 @@ def find_paper(rgb: np.ndarray) -> tuple[int, int, int, int] | None:
     # 이미지 거의 전체가 종이면 자를 필요 없음
     if bw * bh > 0.9 * h * w:
         return None
-    return int(x), int(y), int(x + bw), int(y + bh)
+    sheet = labels == i
+    color = np.median(rgb[sheet & bright], axis=0).astype(np.uint8)
+    # 종이 안의 그림(어두운 영역)도 종이 마스크에 포함
+    return (int(x), int(y), int(x + bw), int(y + bh)), ndimage.binary_fill_holes(sheet), color
 
 
 def initial_box(
@@ -174,9 +186,16 @@ class Sam2Segmenter(Segmenter):
             return alpha >= 128
 
         h, w = rgb.shape[:2]
-        paper = None if prompts.box is not None else find_paper(rgb)
+        region = None if prompts.box is not None else paper_region(rgb)
+        paper = region[0] if region else None
         ox, oy = (paper[0], paper[1]) if paper else (0, 0)
         crop = rgb[paper[1] : paper[3], paper[0] : paper[2]] if paper else rgb
+        if region:
+            # 기울어진 종이의 bbox 모서리에 남는 책상 등을 종이색으로 덮는다.
+            # 그대로 두면 전경 추정이 종이 전체를 물체로 본다 (3-6 스파이크, D-024)
+            crop = crop.copy()
+            outside = ~region[1][paper[1] : paper[3], paper[0] : paper[2]]
+            crop[outside] = region[2]
         crop_alpha = None
         if alpha is not None:
             crop_alpha = alpha[paper[1] : paper[3], paper[0] : paper[2]] if paper else alpha

@@ -107,3 +107,12 @@ def test_retention_removes_old_embedding_cache(ctx):
     os.utime(old, (past, past))
     cleanup_expired(ctx)
     assert not old.exists() and new.exists()
+
+
+def test_paper_region_covers_drawing_and_reports_paper_color():
+    from app.segmentation.sam2 import paper_region
+
+    box, sheet, color = paper_region(photo_of_paper())
+    assert sheet[400, 450]  # 종이 위 빨간 원도 종이 영역
+    assert not sheet[50, 50]  # 책상
+    assert abs(int(color[0]) - images.PAPER[0]) <= 3

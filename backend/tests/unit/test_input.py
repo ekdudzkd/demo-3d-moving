@@ -1,5 +1,5 @@
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 import images
 from app.input.validate import load_and_validate
@@ -105,3 +105,31 @@ def test_mask_is_deterministic(settings):
     b = load_and_validate(images.png_bytes(images.drawing()), settings).result
     assert a.model_dump() == b.model_dump()
     assert np.isfinite(a.blur_score)
+
+
+def test_outline_only_drawing_accepted(settings):
+    # 색칠 없이 윤곽선만 그린 그림: 잉크는 2% 남짓이지만 실루엣은 충분히 크다
+    img = Image.new("RGB", (800, 800), images.PAPER)
+    ImageDraw.Draw(img).ellipse((200, 200, 600, 600), outline=(30, 30, 30), width=8)
+    r = load_and_validate(images.png_bytes(img), settings).result
+    assert r.is_valid, r.errors
+    assert r.object_coverage > 0.15 and r.object_count == 1
+
+
+def test_stick_figure_warns_instead_of_reject(settings):
+    img = Image.new("RGB", (800, 800), images.PAPER)
+    d = ImageDraw.Draw(img)
+    d.line([(400, 150), (400, 500)], fill=(30, 30, 30), width=8)
+    d.line([(250, 300), (550, 300)], fill=(30, 30, 30), width=8)
+    d.line([(400, 500), (280, 680)], fill=(30, 30, 30), width=8)
+    d.line([(400, 500), (520, 680)], fill=(30, 30, 30), width=8)
+    r = load_and_validate(images.png_bytes(img), settings).result
+    assert r.is_valid, r.errors
+    assert "thin_drawing" in codes(r.warnings)
+    assert "object_small" not in codes(r.warnings)
+
+
+def test_tiny_object_still_rejected(settings):
+    img = images.drawing(box=(380, 380, 420, 420))
+    r = load_and_validate(images.png_bytes(img), settings).result
+    assert "object_too_small" in codes(r.errors)

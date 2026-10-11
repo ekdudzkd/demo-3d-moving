@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
+from scipy import ndimage
 
 from app.core.config import Settings
 
@@ -117,19 +118,32 @@ def _analyze(img: Image.Image, r: ValidationResult) -> None:
             )
 
     fg = estimate_foreground(rgb, alpha)
-    mask = fg.mask
+    # 크기는 잉크 픽셀이 아니라 윤곽선 안쪽까지 채운 실루엣으로 잰다.
+    # 윤곽선만 그린 그림은 잉크가 2% 정도라 그대로 재면 "너무 작음"으로 거부된다 (D-024)
+    mask = ndimage.binary_fill_holes(fg.mask)
     r.foreground_source = fg.source
     r.object_coverage = round(float(mask.mean()), 4)
 
     if r.object_coverage < MIN_COVERAGE:
-        r.errors.append(
+        box = bbox(mask)
+        extent = 0.0 if box is None else (box[2] - box[0]) * (box[3] - box[1]) / mask.size
+        if extent < SMALL_COVERAGE:
+            r.errors.append(
+                Issue(
+                    code="object_too_small",
+                    message="객체를 찾지 못했거나 너무 작습니다. 객체를 크게 찍어 주세요.",
+                )
+            )
+            return
+        # 막대 사람처럼 선만 있고 감싼 면이 없는 그림: 범위는 충분하니 거부하지 않고 경고
+        r.warnings.append(
             Issue(
-                code="object_too_small",
-                message="객체를 찾지 못했거나 너무 작습니다. 객체를 크게 찍어 주세요.",
+                code="thin_drawing",
+                message="선이 가늘고 색칠된 면이 적어 3D가 얇거나 끊어질 수 있습니다. "
+                "선을 굵게 그리고 안쪽을 색칠하면 좋아집니다.",
             )
         )
-        return
-    if r.object_coverage < SMALL_COVERAGE:
+    if r.object_coverage < SMALL_COVERAGE and not any(w.code == "thin_drawing" for w in r.warnings):
         r.warnings.append(
             Issue(
                 code="object_small", message="객체가 작습니다. 더 가까이 찍으면 결과가 좋아집니다."
@@ -181,7 +195,8 @@ def _analyze(img: Image.Image, r: ValidationResult) -> None:
 
     if (~mask).any():
         lab = to_lab(rgb)
-        delta = float(np.linalg.norm(lab[mask].mean(axis=0) - lab[~mask].mean(axis=0)))
+        # 평균이면 진한 윤곽선이 연한 안쪽 색을 가린다. 실루엣 대부분의 색(중앙값)으로 비교
+        delta = float(np.linalg.norm(np.median(lab[mask], axis=0) - np.median(lab[~mask], axis=0)))
         r.color_delta_e = round(delta, 2)
         if delta < MIN_DELTA_E:
             r.warnings.append(

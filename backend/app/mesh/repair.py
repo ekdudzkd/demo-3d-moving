@@ -155,6 +155,8 @@ STEPS: list[Step] = [
     Step("fix_normals", fix_normals),
     Step("fill_small_holes", fill_small_holes),
     Step("decimate", decimate, may_drop_faces=True),
+    # quadric 감소가 얇은 연결부를 끊어 작은 조각을 만들 수 있다 (3-6 스파이크에서 1→4조각)
+    Step("remove_small_components_after_decimate", remove_small_components, may_drop_faces=True),
     Step("normalize_scale", normalize_scale),
     Step("center_and_ground", center_and_ground),
 ]
