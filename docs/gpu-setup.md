@@ -35,7 +35,7 @@ docker build -f docker/gpu-worker.Dockerfile -t draw2world-gpu .
 docker run --gpus all -p 8077:8077 -v d2w-data:/data -v d2w-hf:/root/.cache/huggingface draw2world-gpu
 ```
 
-> 2026-10-11 기준 두 방법 모두 검증 전. 점검: `python scripts/check_gpu_env.py` (CUDA·SAM 2·TripoSR import·marching cubes), 컨테이너는 `docker run --gpus all --rm draw2world-gpu python scripts/check_gpu_env.py`.
+> 2026-10-11 두 방법 모두 검증됨 (RTX 4060, 이미지 10.2GB). Docker 빌드는 C: 여유 15GB 이상에서 할 것. 점검: `python scripts/check_gpu_env.py` (CUDA·SAM 2·TripoSR import·marching cubes), 컨테이너는 `docker run --gpus all --rm draw2world-gpu python scripts/check_gpu_env.py`.
 
 ## 가중치
 

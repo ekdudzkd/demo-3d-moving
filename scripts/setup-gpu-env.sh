@@ -25,7 +25,9 @@ echo "▶ 백엔드 + mesh-ready-check"
 uv pip install -q -p "$VENV" -e "$ROOT/packages/mesh-ready-check" -e "$ROOT/backend[dev]"
 
 echo "▶ SAM 2 ($SAM2_COMMIT)"
-SAM2_BUILD_CUDA=0 uv pip install -q -p "$VENV" "git+https://github.com/facebookresearch/sam2.git@$SAM2_COMMIT"
+# 빌드 격리를 끄고 venv의 torch를 쓴다. 격리하면 torch(약 2.5GB)를 한 번 더 받는다
+uv pip install -q -p "$VENV" setuptools wheel
+SAM2_BUILD_CUDA=0 uv pip install -q -p "$VENV" --no-build-isolation "git+https://github.com/facebookresearch/sam2.git@$SAM2_COMMIT"
 
 echo "▶ TripoSR 소스 ($TRIPOSR_COMMIT) → $TRIPOSR_DIR"
 if [ ! -d "$TRIPOSR_DIR/.git" ]; then

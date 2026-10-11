@@ -45,7 +45,9 @@ def install() -> list[str]:
             mod = types.ModuleType("rembg")
 
             def _unused(*_a, **_k):
-                raise RuntimeError("rembg는 사용하지 않습니다. 배경 제거는 분할·전처리 단계가 합니다.")
+                raise RuntimeError(
+                    "rembg는 사용하지 않습니다. 배경 제거는 분할·전처리 단계가 합니다."
+                )
 
             mod.remove = _unused
             mod.new_session = _unused
