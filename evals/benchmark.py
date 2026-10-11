@@ -37,7 +37,7 @@ from app.mesh.inspect import inspect_file  # noqa: E402
 from app.mesh.repair import repair_file  # noqa: E402
 from app.preprocess.normalize import PreprocessOptions, normalize  # noqa: E402
 from app.report.build import outcome_of  # noqa: E402
-from app.report.failures import classify  # noqa: E402
+from app.report.failures import classify, mask_signals  # noqa: E402
 from app.segmentation.base import Prompts  # noqa: E402
 from app.segmentation.postprocess import refine_mask  # noqa: E402
 from app.segmentation.service import get_segmenter  # noqa: E402
@@ -230,14 +230,16 @@ def run_one(e, seed, cfg, roots, settings, adapter, segmenter, work: Path) -> di
         row["world_load"] = len(world_mesh.faces) > 0
         row["collider_type"] = collider["type"]
         alpha = np.asarray(Image.open(pre.normalized))[..., 3] >= 128
-        row["silhouette_iou"] = round(metrics.silhouette_iou(world_mesh, alpha), 4)
+        sil = metrics.silhouette_scores(world_mesh, alpha)
+        row["silhouette_iou"] = sil["iou"]
+        signals = {"silhouette": sil, **mask_signals(mask)}
 
         outcome = outcome_of(repaired)
         row["outcome"] = outcome.value
         row["usable"] = outcome.value != "NOT_USABLE"
         row["failure_types"] = ";".join(
             f["type"] + ("*" if f["fixed_by_repair"] else "")
-            for f in classify(raw, repaired, collider)
+            for f in classify(raw, repaired, collider, signals)
         )
         row["status"] = "COMPLETED"
     except Exception as exc:  # noqa: BLE001 — 한 장 실패가 전체 평가를 멈추지 않게

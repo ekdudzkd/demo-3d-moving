@@ -19,6 +19,7 @@ const STEP_LABELS: Record<string, string> = {
   fill_small_holes: "작은 구멍 채우기",
   decimate: "폴리곤 감소",
   remove_small_components_after_decimate: "감소 후 생긴 작은 조각 제거",
+  remove_degenerate_faces_after_decimate: "감소 후 생긴 면적 0 면 제거",
   normalize_scale: "크기 1m로 정규화",
   center_and_ground: "원점 중앙·바닥 정렬",
 };

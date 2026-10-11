@@ -157,6 +157,11 @@ STEPS: list[Step] = [
     Step("decimate", decimate, may_drop_faces=True),
     # quadric 감소가 얇은 연결부를 끊어 작은 조각을 만들 수 있다 (3-6 스파이크에서 1→4조각)
     Step("remove_small_components_after_decimate", remove_small_components, may_drop_faces=True),
+    # 감소 뒤 정점이 겹쳐 면적 0인 면이 남는다 (3-6 스파이크에서 4장 degenerate_faces 경고)
+    Step(
+        "remove_degenerate_faces_after_decimate",
+        lambda m, b: remove_degenerate_faces(merge_vertices(m, b), b),
+    ),
     Step("normalize_scale", normalize_scale),
     Step("center_and_ground", center_and_ground),
 ]

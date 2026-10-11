@@ -1,9 +1,20 @@
-"""실패 유형 후보 분류 (project-brief §19). 메시 검사 결과 기반 규칙.
+"""실패 유형 후보 분류 (project-brief §19). 규칙 기반.
 
-4-3에서 실루엣 비교 등 지표를 더해 확장한다.
+- 메시 검사 코드 → 유형 (CODE_TO_FAILURE)
+- 실루엣 비교: 입력 그림 중 3D 정면이 덮지 못한 부분이 크면 MISSING_PART
+- 마스크 모양: 원본 대부분을 덮거나 테두리 여러 변에 닿으면 BACKGROUND_LEAK
+- 충돌체: convex hull을 못 쓰면 COLLISION_FAILURE
 """
 
 from __future__ import annotations
+
+import numpy as np
+
+# 입력 마스크 중 메시 정면 실루엣이 덮는 비율이 이보다 낮으면 빠진 부분
+MISSING_PART_RECALL = 0.85
+# 마스크가 원본 이미지의 이 비율을 넘거나, 테두리 이 개수 이상 변에 닿으면 배경 포함 의심
+LEAK_COVERAGE = 0.6
+LEAK_BORDER_SIDES = 2
 
 # 검사 코드 → 실패 유형
 CODE_TO_FAILURE = {
@@ -34,7 +45,24 @@ REMEDIES = {
 }
 
 
-def classify(inspect_raw: dict, inspect_repaired: dict, collider: dict | None) -> list[dict]:
+def mask_signals(mask: np.ndarray) -> dict:
+    """확정 마스크의 원본 대비 면적과 닿은 테두리 변 수."""
+    h, w = mask.shape
+    margin = max(1, round(min(h, w) * 0.005))
+    sides = sum(
+        bool(edge.any())
+        for edge in (mask[:margin], mask[-margin:], mask[:, :margin], mask[:, -margin:])
+    )
+    return {"mask_coverage": round(float(mask.mean()), 4), "mask_border_sides": int(sides)}
+
+
+def classify(
+    inspect_raw: dict,
+    inspect_repaired: dict,
+    collider: dict | None,
+    signals: dict | None = None,
+) -> list[dict]:
+    """signals(선택): silhouette {iou, recall, precision}, mask_coverage, mask_border_sides."""
     raw_codes = {c["code"] for c in inspect_raw["errors"] + inspect_raw["warnings"]}
     fixed_codes = {c["code"] for c in inspect_repaired["errors"] + inspect_repaired["warnings"]}
     found: dict[str, dict] = {}
@@ -51,11 +79,30 @@ def classify(inspect_raw: dict, inspect_repaired: dict, collider: dict | None) -
         if code in fixed_codes:
             entry["fixed_by_repair"] = False
 
+    def add(failure: str, evidence: str) -> None:
+        entry = found.setdefault(
+            failure,
+            {
+                "type": failure,
+                "evidence": [],
+                "fixed_by_repair": False,
+                "remedy": REMEDIES[failure],
+            },
+        )
+        entry["evidence"].append(evidence)
+        entry["fixed_by_repair"] = False
+
+    signals = signals or {}
+    sil = signals.get("silhouette")
+    if sil and sil.get("recall") is not None and sil["recall"] < MISSING_PART_RECALL:
+        add("MISSING_PART", f"silhouette_recall={sil['recall']:.2f}<{MISSING_PART_RECALL}")
+    coverage = signals.get("mask_coverage")
+    if coverage is not None and coverage > LEAK_COVERAGE:
+        add("BACKGROUND_LEAK", f"mask_coverage={coverage:.2f}>{LEAK_COVERAGE}")
+    sides = signals.get("mask_border_sides")
+    if sides is not None and sides >= LEAK_BORDER_SIDES:
+        add("BACKGROUND_LEAK", f"mask_border_sides={sides}>={LEAK_BORDER_SIDES}")
+
     if collider and collider.get("type") != "convex_hull":
-        found["COLLISION_FAILURE"] = {
-            "type": "COLLISION_FAILURE",
-            "evidence": [collider.get("reason") or "convex hull 미사용"],
-            "fixed_by_repair": False,
-            "remedy": REMEDIES["COLLISION_FAILURE"],
-        }
+        add("COLLISION_FAILURE", collider.get("reason") or "convex hull 미사용")
     return list(found.values())

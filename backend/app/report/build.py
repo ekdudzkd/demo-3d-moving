@@ -9,7 +9,8 @@ from app.core.context import AppContext
 from app.db.models import Job, Mask, utcnow
 from app.jobs.states import Outcome
 
-from .failures import classify
+from .failures import classify, mask_signals
+from .silhouette import silhouette_scores
 
 SCHEMA_VERSION = "1.0"
 DISCLAIMER = "한 장의 이미지를 바탕으로 AI가 추정한 3D 모델입니다. 보이지 않는 부분은 실제 모습과 다를 수 있습니다."
@@ -101,7 +102,8 @@ def build_report(ctx: AppContext, job: Job, job_dir: Path) -> dict:
             {k: s[k] for k in ("name", "applied", "rolled_back", "reason", "elapsed_ms")}
             for s in r["repair"]["steps"]
         ],
-        "failure_types": classify(raw, repaired, export["asset"]["collider"]),
+        "signals": (signals := failure_signals(ctx, job)),
+        "failure_types": classify(raw, repaired, export["asset"]["collider"], signals),
         "asset": {
             "asset_id": export["asset"]["asset_id"],
             "collision_type": export["asset"]["collision_type"],
@@ -116,6 +118,29 @@ def build_report(ctx: AppContext, job: Job, job_dir: Path) -> dict:
     }
     (job_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), "utf-8")
     return report
+
+
+def failure_signals(ctx: AppContext, job: Job) -> dict:
+    """실패 분류용 신호: 정면 실루엣 비교, 확정 마스크 면적·테두리 접촉. 계산 실패는 빈 값."""
+    import numpy as np
+    from PIL import Image
+
+    from app.segmentation.service import load_mask
+    from mesh_ready_check import load_mesh
+
+    signals: dict = {}
+    try:
+        mesh, _ = load_mesh(Path(job.result["export"]["repaired_glb"]))
+        normalized = Path(job.result["preprocess"]["normalized"])
+        alpha = np.asarray(Image.open(normalized))[..., 3] >= 128
+        signals["silhouette"] = silhouette_scores(mesh, alpha)
+    except Exception as exc:  # noqa: BLE001 — 신호가 없어도 보고서는 만든다
+        signals["silhouette_error"] = f"{type(exc).__name__}: {exc}"[:200]
+    try:
+        signals.update(mask_signals(load_mask(ctx, job.project_id, job.mask_version)))
+    except Exception as exc:  # noqa: BLE001
+        signals["mask_error"] = f"{type(exc).__name__}: {exc}"[:200]
+    return signals
 
 
 def _mask_summary(mask: Mask | None) -> dict | None:
