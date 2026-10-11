@@ -53,6 +53,8 @@ def test_config_rejects_bad_values(tmp_path):
 
 def test_smoke_benchmark_mock(tmp_path, monkeypatch):
     monkeypatch.setattr(benchmark, "RESULTS", tmp_path)
+    # 합성 그림을 아직 안 만든 깨끗한 checkout(CI)에서도 repo 샘플만으로 돌아야 한다
+    monkeypatch.setenv("SYNTHETIC_DIR", str(tmp_path / "no-synthetic"))
     cfg = benchmark.load_config(benchmark.ROOT / "evals/configs/smoke.yaml")
     out = benchmark.run(cfg, "smoke-test")
     summary = json.loads((out / "summary.json").read_text("utf-8"))

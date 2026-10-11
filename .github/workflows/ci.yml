@@ -53,8 +53,8 @@ jobs:
       - name: 평가셋 manifest (합성 그림 생성 후 파일까지 검증)
         run: |
           ruff check evals && ruff format --check evals
-          pytest -q evals
           python scripts/make_spike_drawings.py
+          pytest -q evals
           python evals/validate_manifest.py
       - name: 평가 benchmark 스모크 (공개 샘플 + Mock)
         run: |

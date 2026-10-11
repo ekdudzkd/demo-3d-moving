@@ -104,14 +104,14 @@ def run(cfg: dict, run_id: str) -> Path:
         mock_fail="",
     )
     roots = mf.default_roots()
-    report = mf.validate(ROOT / cfg["manifest"], roots)
+    # 구조는 전체 행을 보고, 파일은 이번에 돌릴 행만 본다 (안 쓰는 합성 그림이 없어도 실행 가능)
+    report = mf.validate(ROOT / cfg["manifest"], roots, check_files=False)
+    selected = select_entries(report.entries, cfg["select"])
+    for e in selected:
+        mf.check_entry_files(e, roots, report)
     if not report.ok:
         raise SystemExit("manifest 오류:\n" + "\n".join(report.errors))
-    entries = [
-        e
-        for e in select_entries(report.entries, cfg["select"])
-        if e.path(roots) is not None and e.path(roots).is_file()
-    ]
+    entries = [e for e in selected if e.path(roots) is not None]
     if not entries:
         raise SystemExit("실행할 이미지가 없습니다 (select·EVAL_DATA_DIR·합성 그림 생성 확인)")
 

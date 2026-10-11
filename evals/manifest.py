@@ -165,17 +165,24 @@ def validate(
         if e.source != "synthetic" and not SHA_RE.match(e.sha256):
             err("sha256은 소문자 16진수 64자 (synthetic 외 필수)")
 
-        if not check_files or e.root not in ROOTS:
-            continue
-        img = e.path(roots)
-        if img is None:
-            report.skipped.append(f"{where}: {e.root} 위치 미설정 (EVAL_DATA_DIR)")
-            continue
-        if not img.is_file():
-            err(f"파일 없음: {img}")
-        elif e.sha256 and SHA_RE.match(e.sha256) and sha256_file(img) != e.sha256:
-            err(f"sha256 불일치: {img}")
-        mask = e.mask_path(roots)
-        if mask is not None and not mask.is_file():
-            err(f"gt_mask 없음: {mask}")
+        if check_files and e.root in ROOTS:
+            check_entry_files(e, roots, report, where)
     return report
+
+
+def check_entry_files(
+    e: Entry, roots: dict[str, Path | None], report: ValidationReport, where: str | None = None
+) -> None:
+    """이미지·gt_mask 파일이 있고 sha256이 맞는지. benchmark는 고른 행만 이걸로 검사한다."""
+    where = where or f"{MANIFEST.name}:{e.line} ({e.id})"
+    img = e.path(roots)
+    if img is None:
+        report.skipped.append(f"{where}: {e.root} 위치 미설정 (EVAL_DATA_DIR)")
+        return
+    if not img.is_file():
+        report.errors.append(f"{where}: 파일 없음: {img}")
+    elif e.sha256 and SHA_RE.match(e.sha256) and sha256_file(img) != e.sha256:
+        report.errors.append(f"{where}: sha256 불일치: {img}")
+    mask = e.mask_path(roots)
+    if mask is not None and not mask.is_file():
+        report.errors.append(f"{where}: gt_mask 없음: {mask}")
