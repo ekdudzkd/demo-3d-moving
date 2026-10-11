@@ -1,5 +1,7 @@
 # Draw2World AI
 
+[![CI](https://github.com/jngbnss/draw2world-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/jngbnss/draw2world-ai/actions/workflows/ci.yml)
+
 그림 한 장을 업로드하면 객체를 분리하고 3D 모델로 만든 뒤, 메시 품질을 검사·보정해서 작은 가상 공간에서 움직여볼 수 있게 하는 서비스.
 
 ```
@@ -11,7 +13,7 @@
 
 ## 상태
 
-MVP 개발 중. 진행 상황은 [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
+MVP 개발 중. 요약과 다음 할 일은 [`docs/status.md`](docs/status.md), 작업별 상태는 [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
 ## 문서
 
