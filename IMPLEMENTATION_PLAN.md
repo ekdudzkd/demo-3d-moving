@@ -208,7 +208,7 @@ data/projects/{project_id}/
 |---|---|---|---|---|
 | 3-1 | GPU 워커 환경 | `docker/gpu-worker.Dockerfile`, WSL2 설치 문서, 가중치 캐시 볼륨 | 컨테이너에서 `torch.cuda.is_available()` true, TripoSR·SAM2 import 성공 | ✅ 완료 |
 | 3-2 | Sam2Segmenter | 임베딩 캐시, 누적 프롬프트, multimask 선택, 종이 crop·hole fill | 샘플 3장 segment 성공, 재예측 지연 측정 기록 | ✅ 완료 |
-| 3-3 | TripoSRAdapter | 회색 합성 512, mc 해상도, 텍스처 베이크, 시간·VRAM 측정, OOM 재시도 | `pytest -m gpu` 통과, 샘플 → `raw.obj` 생성·측정값 기록 | ⬜ 대기 |
+| 3-3 | TripoSRAdapter | 회색 합성 512, mc 해상도, 텍스처 베이크, 시간·VRAM 측정, OOM 재시도 | `pytest -m gpu` 통과, 샘플 → `raw.obj` 생성·측정값 기록 | 🟡 진행중 |
 | 3-4 | StableFast3DAdapter | 플래그·라이선스 동의 시에만 등록 | 플래그 OFF면 미등록, ON이면 샘플 1장 생성 | ⬜ 대기 |
 | 3-5 | 보정 강화 + 모델 상태 | quadric 감소, 텍스처 GLB 내장, `/health/models` 실측 | 100k 면 메시 → 50k 이하, GLB 텍스처 포함 확인 | ⬜ 대기 |
 | 3-6 | 그림 10장 스파이크 | 스파이크 스크립트, `docs/experiments.md` 기록 | 10장 실행 완료, 성공/사용가능/시간/VRAM 표 기록 | ⬜ 대기 |
