@@ -23,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # 패널 기준표는 백엔드와 같은 파일 하나를 쓴다 (D-026)
+      - run: cp backend/app/edit/basis.json pages/basis.json
       - uses: actions/upload-pages-artifact@v4
         with:
           path: pages

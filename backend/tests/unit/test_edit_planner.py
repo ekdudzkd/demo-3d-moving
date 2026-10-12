@@ -1,6 +1,7 @@
 """5-3 EditPlanner: MockPlanner 한국어 규칙 + ClaudePlanner 계약(가짜 클라이언트, 네트워크 없음)."""
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -14,69 +15,11 @@ from app.edit.planner import (
     get_planner,
 )
 
-# (문장, 패널, 기대 kind, 기대 ops 또는 reason_code)
+# (문장, 패널, 기대 kind, 기대 ops 또는 reason_code) — pages/planner.js도 같은 표로 검사한다
+_SHARED = json.loads((Path(__file__).parents[1] / "fixtures/edit_cases.json").read_text("utf-8"))
 CASES = [
-    ("세워줘", "front", "ops", [{"type": "stand_up"}]),
-    ("옆으로 누워 있어, 세워줘", "left", "ops", [{"type": "stand_up"}]),
-    (
-        "더 두껍게",
-        "front",
-        "ops",
-        [{"type": "scale_axis", "axis": "toward_viewer", "factor": 1.25}],
-    ),
-    ("두께 2배로", "back", "ops", [{"type": "scale_axis", "axis": "toward_viewer", "factor": 2.0}]),
-    (
-        "조금 얇게",
-        "front",
-        "ops",
-        [{"type": "scale_axis", "axis": "toward_viewer", "factor": 1 / 1.1}],
-    ),
-    (
-        "옆으로 2배 길게",
-        "front",
-        "ops",
-        [{"type": "scale_axis", "axis": "screen_right", "factor": 2.0}],
-    ),
-    (
-        "높이를 절반으로 낮게",
-        "front",
-        "ops",
-        [{"type": "scale_axis", "axis": "screen_up", "factor": 0.5}],
-    ),
-    ("전체 크기를 많이 크게", "top", "ops", [{"type": "scale_uniform", "factor": 1.5}]),
-    (
-        "시계방향으로 90도 돌려",
-        "front",
-        "ops",
-        [{"type": "rotate90", "axis": "toward_viewer", "k": -1}],
-    ),
-    ("반시계로 90도 회전", "front", "ops", [{"type": "rotate90", "axis": "toward_viewer", "k": 1}]),
-    ("180도 돌려", "right", "ops", [{"type": "rotate90", "axis": "toward_viewer", "k": 2}]),
-    ("270도 돌려", "front", "ops", [{"type": "rotate90", "axis": "toward_viewer", "k": -1}]),
-    ("앞으로 숙여", "front", "ops", [{"type": "rotate90", "axis": "screen_right", "k": 1}]),
-    ("뒤로 젖혀줘", "left", "ops", [{"type": "rotate90", "axis": "screen_right", "k": -1}]),
-    ("옆모습이 보이게 돌려", "front", "ops", [{"type": "rotate90", "axis": "screen_up", "k": 1}]),
-    ("거꾸로 뒤집어", "front", "ops", [{"type": "rotate90", "axis": "screen_right", "k": 2}]),
-    ("좌우 반전", "front", "ops", [{"type": "mirror", "axis": "screen_right"}]),
-    ("위아래 뒤집어", "front", "ops", [{"type": "mirror", "axis": "screen_up"}]),
-    ("반대로", "front", "ops", [{"type": "invert_last"}]),
-    (
-        "세워주고 그리고 더 두껍게",
-        "front",
-        "ops",
-        [{"type": "stand_up"}, {"type": "scale_axis", "axis": "toward_viewer", "factor": 1.25}],
-    ),
-    ("귀만 길게", "front", "refuse", "part_edit"),
-    ("다리를 더 두껍게", "front", "refuse", "part_edit"),
-    ("모자 추가해줘", "front", "refuse", "out_of_scope"),
-    ("빨갛게 칠해", "front", "refuse", "out_of_scope"),
-    ("45도 돌려", "front", "refuse", "angle_not_supported"),
-    ("2배 키워", "front", "ops", [{"type": "scale_uniform", "factor": 2.0}]),
-    ("20배 크게", "front", "refuse", "out_of_range"),
-    ("360도 돌려", "front", "noop", None),
-    ("아까처럼 해줘", "front", "clarify", None),
-    ("음 별로야", "front", "clarify", None),
-    ("", "front", "clarify", None),
+    (c["text"], c["panel"], c["kind"], c.get("ops", c.get("reason_code")))
+    for c in _SHARED["planner"]
 ]
 
 

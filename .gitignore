@@ -54,3 +54,4 @@ Thumbs.db
 # Playwright
 frontend/e2e-results/
 frontend/playwright-report/
+pages/basis.json

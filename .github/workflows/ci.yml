@@ -86,6 +86,9 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Pages 데모 편집 코어 (Python과 같은 edit_cases.json)
+        working-directory: .
+        run: node --test "pages/tests/*.test.mjs"
 
   e2e:
     runs-on: ubuntu-latest
