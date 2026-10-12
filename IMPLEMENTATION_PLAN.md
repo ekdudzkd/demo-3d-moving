@@ -227,7 +227,7 @@ data/projects/{project_id}/
 | ID | 작업 | 산출물 | 스모크 테스트 | 상태 |
 |---|---|---|---|---|
 | 5-1 | 편집 코어 | `backend/app/edit/` op 스키마·패널 기준표·라벨 회전·합성(4×4)·stand_up·invert_last·누적 범위 검사·no-op 판정, 공용 기준표 JSON | 6패널×op 매트릭스, mirror 면 감김·부피 부호, 텍스처 UV 유지, stand_up(원뿔·막대), 범위 밖 거절 테스트 통과 | ✅ 완료 |
-| 5-2 | 버전 모델 + API | 업로드 view_label, e0 생성, 편집 버전(append-only·prev_state), 워커 적용(QC target_size=None·충돌체·GLB), edits/undo/revert API, active_version·SSE | mock 흐름: e1→e2→undo→undo = e0 op, 실패 주입 → failed·active 유지, pending 중 undo 409 | ⬜ 대기 |
+| 5-2 | 버전 모델 + API | 업로드 view_label, e0 생성, 편집 버전(append-only·prev_state), 워커 적용(QC target_size=None·충돌체·GLB), edits/undo/revert API, active_version·SSE | mock 흐름: e1→e2→undo→undo = e0 op, 실패 주입 → failed·active 유지, pending 중 undo 409 | 🟡 진행중 |
 | 5-3 | EditPlanner | 인터페이스(ops/refuse/clarify), MockPlanner(한국어 규칙), LLM adapter(플래그) | 공용 계약 테스트: "세워줘"·"두껍게"·"반대로"·"귀 길게"(refuse)·"45도"(refuse) | ⬜ 대기 |
 | 5-4 | 프론트 6패널 편집 | 고정 범위 ortho 6패널·e0 외곽선, 패널 선택+채팅, 버전 타임라인·undo | vitest + E2E 1개(세워줘→두껍게→undo) | ⬜ 대기 |
 | 5-5 | pages 데모 적용 | 공용 기준표 JSON 사용, JS 편집 코어·Mock 규칙 | 기준표 JSON 교차 언어 테스트 + 브라우저 수동 확인 | ⬜ 대기 |
