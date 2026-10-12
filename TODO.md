@@ -10,7 +10,7 @@
 | 5-2 | 버전 모델 + API (append-only 이력·undo 체인·실패 버전·asset SSE) | ✅ 완료 |
 | 5-3 | EditPlanner (Mock 한국어 규칙 + Claude 구조화 출력 adapter) | ✅ 완료 |
 | 5-4 | 프론트 6패널 편집 화면 | ✅ 완료 |
-| 5-5 | pages 데모 적용 | ⬜ 대기 |
+| 5-5 | pages 데모 적용 | 🟡 진행중 |
 
 ## 5-5 pages 데모
 
