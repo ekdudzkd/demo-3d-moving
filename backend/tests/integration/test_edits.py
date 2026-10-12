@@ -114,6 +114,7 @@ def test_refuse_and_noop_do_not_create_versions(client, settings):
         "kind": "refuse",
         "message": "되돌릴 편집이 없어요.",
         "reason_code": "nothing_to_invert",
+        "suggested_text": None,
     }
     r = edit(
         client, aid, {"type": "scale_uniform", "factor": 10}, {"type": "scale_uniform", "factor": 2}
@@ -198,3 +199,31 @@ def test_sse_reports_ready_and_active_change(client, settings):
         text = "".join(r.iter_text())
     assert '"active_version": 1' in text
     assert "event: end" in text
+
+
+def say(client, asset_id, text, panel="front"):
+    return client.post(f"/api/assets/{asset_id}/edits", json={"panel": panel, "text": text})
+
+
+def test_text_edit_goes_through_planner(client, settings):
+    aid = completed_asset(client, settings)
+    r = say(client, aid, "더 두껍게", panel="left")
+    assert r.status_code == 202, r.text
+    # left 패널의 화면 밖 방향은 월드 -x → x축 1.25배
+    assert r.json()["ops"] == [{"op": "scale", "factors": [1.25, 1.0, 1.0]}]
+    run_pending(worker_ctx(settings))
+    e1 = edits(client, aid)["versions"][1]
+    assert e1["intent"]["planner"] == "mock" and e1["intent"]["text"] == "더 두껍게"
+
+
+def test_text_edit_refusals_and_clarify(client, settings):
+    aid = completed_asset(client, settings)
+    r = say(client, aid, "귀만 길게").json()
+    assert (r["kind"], r["reason_code"]) == ("refuse", "part_edit")
+    assert r["suggested_text"].startswith("전체를")
+    assert say(client, aid, "45도 돌려").json()["reason_code"] == "angle_not_supported"
+    assert say(client, aid, "360도 돌려").json()["kind"] == "noop"
+    assert say(client, aid, "음 별로야").json()["kind"] == "clarify"
+    assert say(client, aid, "반대로").json()["reason_code"] == "nothing_to_invert"
+    assert say(client, aid, "   ").status_code == 422
+    assert len(edits(client, aid)["versions"]) == 1

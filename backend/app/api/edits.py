@@ -19,8 +19,9 @@ from sqlalchemy.orm import Session
 from app.core.context import AppContext
 from app.db.models import Asset, AssetVersion, Job
 from app.edit.basis import Panel
-from app.edit.compose import resolve
+from app.edit.compose import resolve, user_factors
 from app.edit.ops import ScreenOp
+from app.edit.planner import PlanInput, get_planner
 from app.edit.versions import (
     EditConflict,
     active_version,
@@ -55,6 +56,7 @@ class EditPlanOut(BaseModel):
     kind: Literal["refuse", "clarify", "noop"]
     message: str
     reason_code: str | None = None
+    suggested_text: str | None = None
 
 
 class EditQueuedOut(BaseModel):
@@ -137,24 +139,53 @@ def list_edits(asset_id: str, session: Session = Depends(get_session)):
     response_model=EditQueuedOut,
     responses={200: {"model": EditPlanOut}, 409: {"description": "진행 중인 편집이 있음"}},
 )
-def create_edit(asset_id: str, body: EditIn, session: Session = Depends(get_session)):
+def create_edit(
+    asset_id: str,
+    body: EditIn,
+    ctx: AppContext = Depends(get_ctx),
+    session: Session = Depends(get_session),
+):
     asset = get_asset_or_404(session, asset_id)
-    if body.ops is None:
-        raise HTTPException(422, "ops가 필요합니다.")
+    if body.ops is None and not body.text.strip():
+        raise HTTPException(422, "text나 ops가 필요합니다.")
     if busy := in_progress(session, asset.id):
         return conflict(
             EditConflict("edit_in_progress", f"e{busy.version} 편집을 처리하는 중이에요.")
         )
     active = active_version(session, asset)
-    job = session.get(Job, asset.job_id)
-    res = resolve(body.ops, body.panel, active.ops, load_v0(job))
+    v0 = load_v0(session.get(Job, asset.job_id))
+    ops, planner = body.ops, None
+    if ops is None:
+        # 문장 → 화면 op. 플래너에는 문장·패널·숫자만 보낸다 (D-028)
+        planner = get_planner(ctx.settings)
+        lo, hi = asset.data.get("bounds") or [[0, 0, 0], [0, 0, 0]]
+        plan = planner.plan(
+            PlanInput(
+                text=body.text,
+                panel=body.panel,
+                history=[o for o in active.ops if o["op"] != "label"][-5:],
+                extents_world=[round(h - low, 4) for low, h in zip(lo, hi, strict=True)],
+                cumulative_scale=[round(float(f), 4) for f in user_factors(active.ops)],
+            )
+        )
+        if plan.kind != "ops":
+            out = EditPlanOut(
+                kind=plan.kind,
+                message=plan.message,
+                reason_code=plan.reason_code,
+                suggested_text=plan.suggested_text,
+            )
+            return JSONResponse(status_code=200, content=out.model_dump())
+        ops = plan.ops
+    res = resolve(ops, body.panel, active.ops, v0)
     if res.kind != "ops":
         out = EditPlanOut(kind=res.kind, message=res.message, reason_code=res.reason_code)
         return JSONResponse(status_code=200, content=out.model_dump())
     intent = {
         "panel": body.panel,
         "text": body.text,
-        "screen_ops": [op.model_dump() for op in body.ops],
+        "planner": planner.name if planner else None,
+        "screen_ops": [op.model_dump() for op in ops],
         "notes": res.notes,
     }
     try:

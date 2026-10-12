@@ -351,6 +351,8 @@ export interface components {
             message: string;
             /** Reason Code */
             reason_code?: string | null;
+            /** Suggested Text */
+            suggested_text?: string | null;
         };
         /** EditQueuedOut */
         EditQueuedOut: {

@@ -26,6 +26,9 @@ class Settings(BaseSettings):
 
     # 테스트용 실패 주입: oom | timeout | empty | internal
     mock_fail: str = ""
+    # 자연어 편집 플래너: mock(규칙 기반, 기본·CI) | claude(Claude API, anthropic 패키지·API 키 필요)
+    edit_planner: Literal["mock", "claude"] = "mock"
+    edit_planner_model: str = "claude-opus-5-5"
     # 테스트용 편집 버전 실패 주입: export
     edit_fail: str = ""
     # Mock 생성 단계 지연 (프론트 진행 화면 확인용)

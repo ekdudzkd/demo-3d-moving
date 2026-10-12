@@ -27,6 +27,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.6", "pyyaml>=6"]
+# EDIT_PLANNER=claude일 때만 필요
+llm = ["anthropic>=0.80"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
