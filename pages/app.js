@@ -3,7 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
 import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
-import { EditSession, PANEL_NAMES, PANEL_ORDER, createEditCore, viewSpan } from "./edit.js";
+import { EditSession, HEADING_PANELS, PANEL_NAMES, PANEL_ORDER, createEditCore, headingHalfExtents, headingRotation, viewSpan } from "./edit.js";
 import * as P from "./pipeline.js";
 import { planEdit } from "./planner.js";
 
@@ -281,18 +281,18 @@ async function run(imageData, label) {
     buildInspectObjects(state.result);
     setStep("inspect", repairedReport.is_usable ? "done" : "failed");
 
-    step = "world";
+    step = "blueprint";
     if (!repairedReport.is_usable) {
       // 생성 성공 ≠ 자산 사용 가능: 사용 불가 판정이면 월드에 넣지 않는다
       stopEditing();
       showError("보정 후에도 사용 불가 판정입니다. 월드에 배치하지 않습니다. 다른 그림으로 시도해 주세요.");
       setView("repaired");
     } else {
-      setStep("world", "active");
+      // 바로 월드에 넣지 않고 6방향 설계도에서 확인·수정한 뒤 사용자가 배치한다
+      setStep("blueprint", "active");
       await pause(120);
       await startEditing(state.result);
-      setView("world");
-      setStep("world", "done");
+      setView("edit");
     }
     document.body.dataset.status = "ready";
   } catch (err) {
@@ -419,10 +419,7 @@ function renderQC(res) {
 }
 
 $("#toWorld").addEventListener("click", () => {
-  if (state.result?.repairedReport.is_usable) {
-    setView("world");
-    $("#viewport").scrollIntoView({ behavior: "smooth", block: "center" });
-  }
+  if (state.edit) placeInWorld();
 });
 
 $("#downloadGlb").addEventListener("click", () => {
@@ -689,8 +686,8 @@ const player = {
 player.root.add(player.tilt);
 worldScene.add(player.root);
 
-/** 월드에 자산을 둔다. respawn=false면 편집 버전만 바꾸고 위치·보석은 그대로 둔다. */
-function spawnPlayer(meshData, collider, respawnPlayer = true) {
+/** 월드에 자산을 둔다. 앞쪽 패널이 로컬 +X(진행 방향)를 보게 돌린다. respawn=false면 위치·보석은 그대로. */
+function spawnPlayer(meshData, collider, heading, respawnPlayer = true) {
   disposeGroup(player.tilt);
   const geom = meshGeometry(meshData);
   const mesh = new THREE.Mesh(geom, objectMaterial);
@@ -699,10 +696,15 @@ function spawnPlayer(meshData, collider, respawnPlayer = true) {
   const wire = new THREE.Mesh(geom, wireMaterial);
   wire.name = "wire";
   const col = colliderHelpers({ ...collider, points: null });
-  player.tilt.add(mesh, wire, col);
+  const model = new THREE.Group();
+  const theta = headingRotation(state.edit.core.panels, heading);
+  model.rotation.y = theta;
+  model.add(mesh, wire, col);
+  player.tilt.add(model);
   player.tilt.scale.setScalar(WORLD_SCALE);
   const [hx, hy, hz] = collider.box.half_extents;
-  player.half = [hx * WORLD_SCALE, hy * WORLD_SCALE, hz * WORLD_SCALE];
+  const [ax, az] = headingHalfExtents([hx, hy, hz], theta);
+  player.half = [ax * WORLD_SCALE, hy * WORLD_SCALE, az * WORLD_SCALE];
   player.height = hy * 2 * WORLD_SCALE;
   player.ready = true;
   if (respawnPlayer) {
@@ -718,7 +720,7 @@ function spawnPlayer(meshData, collider, respawnPlayer = true) {
 function respawn() {
   player.pos.set(0, 6, 0);
   player.vel.set(0, 0, 0);
-  player.yaw = 0;
+  player.yaw = -Math.PI / 2; // 앞쪽이 카메라(+z)를 보게 떨어진다
   player.target = null;
   player.onGround = false;
   marker.visible = false;
@@ -919,14 +921,16 @@ function setView(v) {
   $$(".vt").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
   $("#pad").hidden = v !== "world" || !player.ready;
   $("#editGrid").hidden = v !== "edit";
-  $("#help").textContent = v === "world" && !player.ready ? "그림을 변환하면 여기에 등장합니다" : HELP[v] ?? "";
+  $("#hud").hidden = v === "edit"; // 패널 머리글과 겹치므로 설계도에서는 숨긴다 (안내는 왼쪽 카드)
+  const waiting = state.edit && !state.edit.placed ? "6방향 설계도를 확인하고 '이 모양으로 월드에 배치'를 누르면 여기에 등장합니다" : "그림을 변환하면 여기에 등장합니다";
+  $("#help").textContent = v === "world" && !player.ready ? waiting : (HELP[v] ?? "");
   inspectObjects.raw.visible = v === "raw";
   inspectObjects.repaired.visible = v === "repaired";
   const r = state.result;
   const rep = r && (v === "raw" ? r.rawReport : r.repairedReport);
   $("#legend").textContent = rep ? `${v === "raw" ? "원본" : "보정본"} · 정점 ${fmt(rep.vertex_count)} · 면 ${fmt(rep.face_count)}` : "";
-  if (v === "world" && r) $("#legend").textContent = `월드 배율 ×${WORLD_SCALE} · 충돌체: 상자${state.edit ? ` · 편집 e${state.edit.session.active}` : ""}`;
-  if (v === "edit") $("#legend").textContent = `패널마다 고정 범위 정사영 · 현재 e${state.edit.session.active}`;
+  if (v === "world" && r && player.ready) $("#legend").textContent = `월드 배율 ×${WORLD_SCALE} · 충돌체: 상자 · 편집 e${state.edit.session.active} · 앞쪽 ${PANEL_NAMES[state.edit.heading]}`;
+  if (v === "edit") $("#legend").textContent = `설계도(정사영, 패널마다 고정 범위 ${state.edit.span.toFixed(2)} m) · 현재 e${state.edit.session.active}`;
   if (!controls) return;
   controls.enabled = v !== "edit";
   if (v === "world") {
@@ -1014,7 +1018,7 @@ for (const panel of PANEL_ORDER) {
   cell.setAttribute("role", "radio");
   cell.dataset.panel = panel;
   cell.setAttribute("aria-label", `${PANEL_NAMES[panel]} 패널`);
-  cell.innerHTML = `<div class="ph"><b>${PANEL_NAMES[panel]}</b><em hidden>입력 그림</em><small></small></div><div class="pv"></div>`;
+  cell.innerHTML = `<div class="ph"><b>${PANEL_NAMES[panel]}</b><em hidden>입력 그림</em><i hidden>앞(W)</i><small></small></div><div class="pv"></div>`;
   cell.addEventListener("click", () => selectPanel(panel));
   $("#editGrid").append(cell);
   panelCells[panel] = cell;
@@ -1073,23 +1077,40 @@ function clearEditObjects() {
   disposeGroup(editObjects);
 }
 
-/** 보정 메시를 v0으로 e0을 만들고 월드에 활성 버전을 둔다 */
+/** 보정 메시를 v0으로 e0을 만든다. 월드 배치는 사용자가 설계도를 확인한 뒤 placeInWorld로 한다. */
 async function startEditing(res) {
   const core = await editCorePromise.catch((e) => {
     throw new Error(`편집 기준표(basis.json)를 불러오지 못했습니다: ${e.message}`);
   });
   const label = $("#viewLabel").value || "front";
   const session = new EditSession(core, res.repair.mesh, label, { faceBudget: Number($("#budget").value) });
-  state.edit = { core, session, panel: label };
+  state.edit = { core, session, panel: label, heading: $("#heading").value || "front", placed: false };
+  disposeGroup(player.tilt);
+  player.ready = false;
+  setStep("world", "");
   $("#editChat").replaceChildren();
   $("#editCard").hidden = false;
+  $("#editToWorld").textContent = "이 모양으로 월드에 배치 →";
   for (const [p, cell] of Object.entries(panelCells)) cell.querySelector("em").hidden = p !== label;
   selectPanel(label);
-  refreshEdit(true);
+  refreshEdit();
+}
+
+/** 설계도 확인 끝: 활성 버전을 고른 앞쪽으로 월드에 놓는다 */
+function placeInWorld() {
+  const ed = state.edit;
+  const active = ed.session.activeVersion;
+  ed.placed = true;
+  spawnPlayer(active.mesh, active.collider, ed.heading, true);
+  setStep("blueprint", "done");
+  setStep("world", "done");
+  $("#editToWorld").textContent = "월드에서 보기 →";
+  setView("world");
+  $("#viewport").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 /** 버전 목록·6패널 장면·월드 자산을 활성 버전으로 맞춘다 */
-function refreshEdit(respawnPlayer = false) {
+function refreshEdit() {
   const { session } = state.edit;
   const active = session.activeVersion;
   const e0 = session.versions[0];
@@ -1116,7 +1137,14 @@ function refreshEdit(respawnPlayer = false) {
   clearEditObjects();
   const span = viewSpan(e0.bounds, active.bounds);
   state.edit.span = span;
-  for (const cell of Object.values(panelCells)) cell.querySelector("small").textContent = `범위 ${span.toFixed(2)} m`;
+  // 설계도 치수: 패널마다 화면 가로·세로에 해당하는 실제 크기
+  const size = [0, 1, 2].map((k) => active.bounds[1][k] - active.bounds[0][k]);
+  const dim = (vec) => size[vec.findIndex((x) => x !== 0)];
+  for (const [p, cell] of Object.entries(panelCells)) {
+    const axes = state.edit.core.panels[p];
+    cell.querySelector("small").textContent = `${dim(axes.screen_right).toFixed(2)} × ${dim(axes.screen_up).toFixed(2)} m`;
+    cell.querySelector("i").hidden = p !== state.edit.heading;
+  }
   editObjects.add(new THREE.GridHelper(span * 4, 40, 0xc9b79a, 0xe4ddd0));
   editObjects.add(new THREE.Mesh(meshGeometry(active.mesh), objectMaterial));
   const [lo, hi] = e0.bounds;
@@ -1128,7 +1156,7 @@ function refreshEdit(respawnPlayer = false) {
   box.computeLineDistances();
   editObjects.add(box);
 
-  spawnPlayer(active.mesh, active.collider, respawnPlayer);
+  if (state.edit.placed) spawnPlayer(active.mesh, active.collider, state.edit.heading, false);
   if (state.view === "edit" || state.view === "world") setView(state.view);
 }
 
@@ -1173,8 +1201,23 @@ $("#editForm").addEventListener("submit", (e) => {
 });
 $("#editUndo").addEventListener("click", () => state.edit && editAction(() => state.edit.session.undo(), "되돌리기"));
 $("#editToWorld").addEventListener("click", () => {
-  setView("world");
-  $("#viewport").scrollIntoView({ behavior: "smooth", block: "center" });
+  if (!state.edit) return;
+  if (state.edit.placed) {
+    setView("world");
+    $("#viewport").scrollIntoView({ behavior: "smooth", block: "center" });
+  } else placeInWorld();
+});
+for (const p of HEADING_PANELS) {
+  const o = document.createElement("option");
+  o.value = p;
+  o.textContent = `${PANEL_NAMES[p]} 패널 쪽 면`;
+  $("#heading").append(o);
+}
+$("#heading").addEventListener("change", () => {
+  if (!state.edit) return;
+  state.edit.heading = $("#heading").value;
+  say(`앞쪽을 '${PANEL_NAMES[state.edit.heading]}' 패널 쪽 면으로 정했어요. W를 누르면 이 면이 가는 방향을 봐요.`);
+  refreshEdit();
 });
 for (const p of PANEL_ORDER) {
   const o = document.createElement("option");

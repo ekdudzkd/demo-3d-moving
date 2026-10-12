@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { EditSession, createEditCore, extents, meshBounds } from "../edit.js";
+import { EditSession, HEADING_PANELS, createEditCore, extents, headingHalfExtents, headingRotation, meshBounds } from "../edit.js";
 import { planEdit } from "../planner.js";
 
 const root = new URL("../../", import.meta.url);
@@ -106,4 +106,22 @@ test("버전: noop·refuse는 버전을 만들지 않는다", () => {
   assert.equal(s.edit([{ type: "stand_up" }], "front").kind, "noop");
   assert.equal(s.edit([{ type: "invert_last" }], "front").kind, "refuse");
   assert.equal(s.versions.length, 1);
+});
+
+// three.js rotation.y = θ: (x, z) → (x cosθ + z sinθ, −x sinθ + z cosθ)
+const rotY = ([x, , z], t) => [x * Math.cos(t) + z * Math.sin(t), -x * Math.sin(t) + z * Math.cos(t)];
+
+for (const heading of HEADING_PANELS) {
+  test(`앞쪽 ${heading}: 그 패널 쪽 면이 진행 방향(로컬 +X)을 본다`, () => {
+    const t = headingRotation(basis.panels, heading);
+    const [x, z] = rotY(basis.panels[heading].toward_viewer, t);
+    close(x, 1, 1e-12);
+    close(z, 0, 1e-12);
+  });
+}
+
+test("앞쪽이 옆면이면 충돌 상자 x·z 반치수가 바뀐다", () => {
+  const half = [0.5, 1, 0.1];
+  assert.deepEqual(headingHalfExtents(half, headingRotation(basis.panels, "front")), [0.1, 0.5]);
+  assert.deepEqual(headingHalfExtents(half, headingRotation(basis.panels, "right")), [0.5, 0.1]);
 });

@@ -17,6 +17,23 @@ const CENTROID_TOLERANCE = 0.02;
 const AXES = "xyz";
 export const PANEL_ORDER = ["front", "back", "left", "right", "top", "bottom"];
 export const PANEL_NAMES = { front: "정면", back: "뒤", left: "왼쪽", right: "오른쪽", top: "위", bottom: "아래" };
+// 월드에서 W로 갈 수 있는 앞쪽 후보 (위·아래는 바닥과 평행하지 않아 제외)
+export const HEADING_PANELS = ["front", "back", "left", "right"];
+
+/**
+ * 앞쪽 패널의 바깥 방향(toward_viewer)을 모델 로컬 +X(월드 이동 코드의 진행 방향)로 돌리는 y축 회전각.
+ * three.js rotation.y = θ 는 (x, z) → (x cosθ + z sinθ, −x sinθ + z cosθ).
+ */
+export function headingRotation(panels, heading) {
+  const t = panels[heading].toward_viewer;
+  return -Math.atan2(-t[2], t[0]);
+}
+
+/** 앞쪽 회전 뒤 충돌 상자 반치수 [x, z] (90° 단위라 축이 서로 바뀔 뿐) */
+export function headingHalfExtents(half, theta) {
+  return Math.abs(Math.sin(theta)) > 0.5 ? [half[2], half[0]] : [half[0], half[2]];
+}
+
 
 // ---------------------------------------------------------------------------
 // 3×3 행렬 (행 우선 배열)

@@ -256,6 +256,8 @@ table.diff code { font-size: 10.5px; background: none; padding: 0; color: #8a949
 .pcell[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(163, 107, 37, .25); }
 .pcell .ph { display: flex; gap: 6px; align-items: center; padding: 4px 8px; font-size: 12px; background: rgba(255, 253, 248, .94); border-bottom: 1px solid var(--line); }
 .pcell .ph em { font-style: normal; font-size: 10px; font-weight: 700; background: var(--warn-bg); color: var(--warn); border-radius: 999px; padding: 1px 6px; }
+.pcell .ph i { font-style: normal; font-size: 10px; font-weight: 700; background: var(--ink); color: #fff; border-radius: 999px; padding: 1px 6px; }
+.heading-field { margin-top: 14px; }
 .pcell .ph small { margin-left: auto; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .pcell .pv { flex: 1; }
 
