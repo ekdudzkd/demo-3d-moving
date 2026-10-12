@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -14,6 +15,8 @@ class GenerationOptions(BaseModel):
     bake_texture: bool = False
     texture_resolution: int = Field(1024, ge=128, le=4096)
     device: str = "cuda"
+    # 입력 그림이 물체를 어느 쪽에서 본 것인지 (D-026). 생성은 늘 정면으로 가정하고, 라벨은 생성 뒤 회전에만 쓴다
+    view_label: Literal["front", "back", "left", "right", "top", "bottom"] = "front"
 
 
 class ModelInfo(BaseModel):

@@ -18,6 +18,7 @@ from sqlalchemy.orm import object_session
 from app.core.context import AppContext
 from app.core.errors import ErrorCode, PipelineError
 from app.db.models import Asset, Job, utcnow
+from app.edit.versions import init_versions
 from app.export.build import export_assets
 from app.generation.base import GenerationOptions
 from app.generation.registry import get_adapter
@@ -93,9 +94,15 @@ def stage_export(s: StageInput) -> dict:
     exported = export_assets(s.ctx, s.job, s.dir, display_name="My Drawing")
     asset = exported["asset"]
     session = object_session(s.job)
-    session.add(
-        Asset(id=asset["asset_id"], job_id=s.job.id, display_name=asset["display_name"], data=asset)
+    row = Asset(
+        id=asset["asset_id"], job_id=s.job.id, display_name=asset["display_name"], data=asset
     )
+    session.add(row)
+    session.flush()
+    # 편집 버전 e0: 라벨 회전만 적용한 상태 (D-027). front면 보정 GLB 그대로
+    init_versions(s.ctx, session, s.job, row)
+    exported["asset"] = row.data
+    write_json(Path(exported["asset_path"]), row.data)
     return {"export": exported}
 
 

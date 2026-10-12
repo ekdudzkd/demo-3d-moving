@@ -26,6 +26,8 @@ class Settings(BaseSettings):
 
     # 테스트용 실패 주입: oom | timeout | empty | internal
     mock_fail: str = ""
+    # 테스트용 편집 버전 실패 주입: export
+    edit_fail: str = ""
     # Mock 생성 단계 지연 (프론트 진행 화면 확인용)
     mock_delay_ms: int = 0
 

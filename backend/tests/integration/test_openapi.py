@@ -12,6 +12,10 @@ def test_openapi_has_contract(client):
         "/api/jobs/{job_id}/cancel",
         "/api/jobs/{job_id}/retry",
         "/api/assets/{asset_id}",
+        "/api/assets/{asset_id}/edits",
+        "/api/assets/{asset_id}/edits/undo",
+        "/api/assets/{asset_id}/edits/revert",
+        "/api/assets/{asset_id}/events",
         "/api/health",
         "/api/health/models",
     ):

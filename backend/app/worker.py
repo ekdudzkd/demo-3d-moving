@@ -11,6 +11,7 @@ import time
 
 from app.core.config import Settings
 from app.core.context import AppContext, build_context
+from app.edit.versions import claim_next_version, recover_stale_versions, run_version
 from app.jobs.pipeline import run_job
 from app.jobs.queue import claim_next, recover_stale
 from app.jobs.retention import cleanup_expired
@@ -20,17 +21,22 @@ CLEANUP_INTERVAL_SECONDS = 600
 
 
 def run_pending(ctx: AppContext) -> int:
-    """대기 중인 job을 모두 처리하고 처리한 개수를 돌려준다."""
+    """대기 중인 생성 job과 편집 버전을 모두 처리하고 처리한 개수를 돌려준다."""
     count = 0
     while True:
         with ctx.session() as session:
             job = claim_next(session)
             job_id = job.id if job else None
-        if job_id is None:
+            version_id = None if job_id else claim_next_version(session)
+        if job_id is not None:
+            log.info("job %s 시작", job_id)
+            status = run_job(ctx, job_id)
+            log.info("job %s → %s", job_id, status)
+        elif version_id is not None:
+            status = run_version(ctx, version_id)
+            log.info("편집 버전 %s → %s", version_id, status)
+        else:
             return count
-        log.info("job %s 시작", job_id)
-        status = run_job(ctx, job_id)
-        log.info("job %s → %s", job_id, status)
         count += 1
 
 
@@ -44,6 +50,8 @@ def main(argv: list[str] | None = None) -> None:
     with ctx.session() as session:
         if n := recover_stale(session):
             log.warning("중단된 job %d개를 실패 처리", n)
+        if n := recover_stale_versions(session):
+            log.warning("중단된 편집 버전 %d개를 실패 처리", n)
     log.info("워커 시작 generator=%s segmenter=%s", ctx.settings.generator, ctx.settings.segmenter)
 
     last_cleanup = 0.0

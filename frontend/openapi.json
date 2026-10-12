@@ -32,6 +32,194 @@
         "title": "ConfirmIn",
         "type": "object"
       },
+      "EditIn": {
+        "properties": {
+          "ops": {
+            "anyOf": [
+              {
+                "items": {
+                  "discriminator": {
+                    "mapping": {
+                      "invert_last": "#/components/schemas/InvertLast",
+                      "mirror": "#/components/schemas/Mirror",
+                      "rotate90": "#/components/schemas/Rotate90",
+                      "scale_axis": "#/components/schemas/ScaleAxis",
+                      "scale_uniform": "#/components/schemas/ScaleUniform",
+                      "stand_up": "#/components/schemas/StandUp"
+                    },
+                    "propertyName": "type"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Rotate90"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ScaleAxis"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ScaleUniform"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Mirror"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StandUp"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvertLast"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "화면 기준 op. 없으면 text를 플래너가 해석",
+            "title": "Ops"
+          },
+          "panel": {
+            "enum": [
+              "front",
+              "back",
+              "left",
+              "right",
+              "top",
+              "bottom"
+            ],
+            "title": "Panel",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "panel"
+        ],
+        "title": "EditIn",
+        "type": "object"
+      },
+      "EditPlanOut": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "refuse",
+              "clarify",
+              "noop"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          }
+        },
+        "required": [
+          "kind",
+          "message"
+        ],
+        "title": "EditPlanOut",
+        "type": "object"
+      },
+      "EditQueuedOut": {
+        "properties": {
+          "kind": {
+            "const": "ops",
+            "default": "ops",
+            "title": "Kind",
+            "type": "string"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "ops": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Ops",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "ops"
+        ],
+        "title": "EditQueuedOut",
+        "type": "object"
+      },
+      "EditsOut": {
+        "properties": {
+          "active_version": {
+            "title": "Active Version",
+            "type": "integer"
+          },
+          "asset_id": {
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "can_undo": {
+            "title": "Can Undo",
+            "type": "boolean"
+          },
+          "in_progress": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Progress"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/VersionOut"
+            },
+            "title": "Versions",
+            "type": "array"
+          },
+          "view_label": {
+            "title": "View Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asset_id",
+          "view_label",
+          "active_version",
+          "can_undo",
+          "in_progress",
+          "versions"
+        ],
+        "title": "EditsOut",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -43,6 +231,24 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "InvertLast": {
+        "properties": {
+          "target": {
+            "const": "whole",
+            "default": "whole",
+            "title": "Target",
+            "type": "string"
+          },
+          "type": {
+            "const": "invert_last",
+            "default": "invert_last",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "InvertLast",
         "type": "object"
       },
       "Issue": {
@@ -382,6 +588,36 @@
         "title": "MaskOut",
         "type": "object"
       },
+      "Mirror": {
+        "properties": {
+          "axis": {
+            "enum": [
+              "screen_right",
+              "screen_up",
+              "toward_viewer"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "target": {
+            "const": "whole",
+            "default": "whole",
+            "title": "Target",
+            "type": "string"
+          },
+          "type": {
+            "const": "mirror",
+            "default": "mirror",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "axis"
+        ],
+        "title": "Mirror",
+        "type": "object"
+      },
       "Point": {
         "properties": {
           "label": {
@@ -494,6 +730,120 @@
         "title": "RejectedOut",
         "type": "object"
       },
+      "RevertIn": {
+        "properties": {
+          "to_version": {
+            "title": "To Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "to_version"
+        ],
+        "title": "RevertIn",
+        "type": "object"
+      },
+      "Rotate90": {
+        "properties": {
+          "axis": {
+            "enum": [
+              "screen_right",
+              "screen_up",
+              "toward_viewer"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "k": {
+            "maximum": 3.0,
+            "minimum": -3.0,
+            "title": "K",
+            "type": "integer"
+          },
+          "target": {
+            "const": "whole",
+            "default": "whole",
+            "title": "Target",
+            "type": "string"
+          },
+          "type": {
+            "const": "rotate90",
+            "default": "rotate90",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "axis",
+          "k"
+        ],
+        "title": "Rotate90",
+        "type": "object"
+      },
+      "ScaleAxis": {
+        "properties": {
+          "axis": {
+            "enum": [
+              "screen_right",
+              "screen_up",
+              "toward_viewer"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "factor": {
+            "maximum": 10.0,
+            "minimum": 0.1,
+            "title": "Factor",
+            "type": "number"
+          },
+          "target": {
+            "const": "whole",
+            "default": "whole",
+            "title": "Target",
+            "type": "string"
+          },
+          "type": {
+            "const": "scale_axis",
+            "default": "scale_axis",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "axis",
+          "factor"
+        ],
+        "title": "ScaleAxis",
+        "type": "object"
+      },
+      "ScaleUniform": {
+        "properties": {
+          "factor": {
+            "maximum": 10.0,
+            "minimum": 0.1,
+            "title": "Factor",
+            "type": "number"
+          },
+          "target": {
+            "const": "whole",
+            "default": "whole",
+            "title": "Target",
+            "type": "string"
+          },
+          "type": {
+            "const": "scale_uniform",
+            "default": "scale_uniform",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "factor"
+        ],
+        "title": "ScaleUniform",
+        "type": "object"
+      },
       "SegmentIn": {
         "properties": {
           "box": {
@@ -568,6 +918,24 @@
           "stage"
         ],
         "title": "StageTiming",
+        "type": "object"
+      },
+      "StandUp": {
+        "properties": {
+          "target": {
+            "const": "whole",
+            "default": "whole",
+            "title": "Target",
+            "type": "string"
+          },
+          "type": {
+            "const": "stand_up",
+            "default": "stand_up",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "StandUp",
         "type": "object"
       },
       "ValidationError": {
@@ -730,6 +1098,119 @@
         ],
         "title": "ValidationResult",
         "type": "object"
+      },
+      "VersionOut": {
+        "properties": {
+          "bounds": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bounds"
+          },
+          "collision_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collision Type"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "intent": {
+            "additionalProperties": true,
+            "title": "Intent",
+            "type": "object"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "mesh_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mesh Url"
+          },
+          "ops": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Ops",
+            "type": "array"
+          },
+          "prev_state": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prev State"
+          },
+          "qc": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qc"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "status",
+          "kind",
+          "ops",
+          "intent",
+          "prev_state"
+        ],
+        "title": "VersionOut",
+        "type": "object"
       }
     }
   },
@@ -781,6 +1262,246 @@
         "summary": "Get Asset",
         "tags": [
           "assets"
+        ]
+      }
+    },
+    "/api/assets/{asset_id}/edits": {
+      "get": {
+        "operationId": "list_edits_api_assets__asset_id__edits_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Edits",
+        "tags": [
+          "edits"
+        ]
+      },
+      "post": {
+        "operationId": "create_edit_api_assets__asset_id__edits_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditPlanOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditQueuedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "진행 중인 편집이 있음"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Edit",
+        "tags": [
+          "edits"
+        ]
+      }
+    },
+    "/api/assets/{asset_id}/edits/revert": {
+      "post": {
+        "operationId": "revert_api_assets__asset_id__edits_revert_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevertIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revert",
+        "tags": [
+          "edits"
+        ]
+      }
+    },
+    "/api/assets/{asset_id}/edits/undo": {
+      "post": {
+        "operationId": "undo_api_assets__asset_id__edits_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo",
+        "tags": [
+          "edits"
+        ]
+      }
+    },
+    "/api/assets/{asset_id}/events": {
+      "get": {
+        "description": "편집 버전 상태 SSE. edit_ready·edit_failed·active_version_changed.\n\nfollow=0이면 진행 중인 편집이 없을 때 스트림을 닫는다(테스트·폴링용).",
+        "operationId": "events_api_assets__asset_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Events",
+        "tags": [
+          "edits"
         ]
       }
     },

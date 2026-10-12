@@ -24,6 +24,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/edits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Edits */
+        get: operations["list_edits_api_assets__asset_id__edits_get"];
+        put?: never;
+        /** Create Edit */
+        post: operations["create_edit_api_assets__asset_id__edits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/{asset_id}/edits/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revert */
+        post: operations["revert_api_assets__asset_id__edits_revert_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/{asset_id}/edits/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo */
+        post: operations["undo_api_assets__asset_id__edits_undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/{asset_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Events
+         * @description 편집 버전 상태 SSE. edit_ready·edit_failed·active_version_changed.
+         *
+         *     follow=0이면 진행 중인 편집이 없을 때 스트림을 닫는다(테스트·폴링용).
+         */
+        get: operations["events_api_assets__asset_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/files/{path}": {
         parameters: {
             query?: never;
@@ -248,10 +322,86 @@ export interface components {
             /** Version */
             version?: number | null;
         };
+        /** EditIn */
+        EditIn: {
+            /**
+             * Ops
+             * @description 화면 기준 op. 없으면 text를 플래너가 해석
+             */
+            ops?: (components["schemas"]["Rotate90"] | components["schemas"]["ScaleAxis"] | components["schemas"]["ScaleUniform"] | components["schemas"]["Mirror"] | components["schemas"]["StandUp"] | components["schemas"]["InvertLast"])[] | null;
+            /**
+             * Panel
+             * @enum {string}
+             */
+            panel: "front" | "back" | "left" | "right" | "top" | "bottom";
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+        };
+        /** EditPlanOut */
+        EditPlanOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "refuse" | "clarify" | "noop";
+            /** Message */
+            message: string;
+            /** Reason Code */
+            reason_code?: string | null;
+        };
+        /** EditQueuedOut */
+        EditQueuedOut: {
+            /**
+             * Kind
+             * @default ops
+             * @constant
+             */
+            kind: "ops";
+            /** Notes */
+            notes?: string[];
+            /** Ops */
+            ops: {
+                [key: string]: unknown;
+            }[];
+            /** Version */
+            version: number;
+        };
+        /** EditsOut */
+        EditsOut: {
+            /** Active Version */
+            active_version: number;
+            /** Asset Id */
+            asset_id: string;
+            /** Can Undo */
+            can_undo: boolean;
+            /** In Progress */
+            in_progress: number | null;
+            /** Versions */
+            versions: components["schemas"]["VersionOut"][];
+            /** View Label */
+            view_label: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** InvertLast */
+        InvertLast: {
+            /**
+             * Target
+             * @default whole
+             * @constant
+             */
+            target: "whole";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "invert_last";
         };
         /** Issue */
         Issue: {
@@ -375,6 +525,25 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** Mirror */
+        Mirror: {
+            /**
+             * Axis
+             * @enum {string}
+             */
+            axis: "screen_right" | "screen_up" | "toward_viewer";
+            /**
+             * Target
+             * @default whole
+             * @constant
+             */
+            target: "whole";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "mirror";
+        };
         /** Point */
         Point: {
             /**
@@ -422,6 +591,69 @@ export interface components {
             status: string;
             validation: components["schemas"]["ValidationResult"];
         };
+        /** RevertIn */
+        RevertIn: {
+            /** To Version */
+            to_version: number;
+        };
+        /** Rotate90 */
+        Rotate90: {
+            /**
+             * Axis
+             * @enum {string}
+             */
+            axis: "screen_right" | "screen_up" | "toward_viewer";
+            /** K */
+            k: number;
+            /**
+             * Target
+             * @default whole
+             * @constant
+             */
+            target: "whole";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "rotate90";
+        };
+        /** ScaleAxis */
+        ScaleAxis: {
+            /**
+             * Axis
+             * @enum {string}
+             */
+            axis: "screen_right" | "screen_up" | "toward_viewer";
+            /** Factor */
+            factor: number;
+            /**
+             * Target
+             * @default whole
+             * @constant
+             */
+            target: "whole";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "scale_axis";
+        };
+        /** ScaleUniform */
+        ScaleUniform: {
+            /** Factor */
+            factor: number;
+            /**
+             * Target
+             * @default whole
+             * @constant
+             */
+            target: "whole";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "scale_uniform";
+        };
         /** SegmentIn */
         SegmentIn: {
             /**
@@ -442,6 +674,20 @@ export interface components {
             stage: string;
             /** Started At */
             started_at?: string | null;
+        };
+        /** StandUp */
+        StandUp: {
+            /**
+             * Target
+             * @default whole
+             * @constant
+             */
+            target: "whole";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "stand_up";
         };
         /** ValidationError */
         ValidationError: {
@@ -502,6 +748,39 @@ export interface components {
              */
             width: number;
         };
+        /** VersionOut */
+        VersionOut: {
+            /** Bounds */
+            bounds?: number[][] | null;
+            /** Collision Type */
+            collision_type?: string | null;
+            /** Error */
+            error?: {
+                [key: string]: unknown;
+            } | null;
+            /** Intent */
+            intent: {
+                [key: string]: unknown;
+            };
+            /** Kind */
+            kind: string;
+            /** Mesh Url */
+            mesh_url?: string | null;
+            /** Ops */
+            ops: {
+                [key: string]: unknown;
+            }[];
+            /** Prev State */
+            prev_state: number | null;
+            /** Qc */
+            qc?: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status: string;
+            /** Version */
+            version: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -531,6 +810,185 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_edits_api_assets__asset_id__edits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_edit_api_assets__asset_id__edits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditPlanOut"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditQueuedOut"];
+                };
+            };
+            /** @description 진행 중인 편집이 있음 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revert_api_assets__asset_id__edits_revert_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevertIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_api_assets__asset_id__edits_undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    events_api_assets__asset_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

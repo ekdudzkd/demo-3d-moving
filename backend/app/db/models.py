@@ -3,7 +3,17 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
@@ -119,3 +129,30 @@ class Asset(Base):
     display_name: Mapped[str] = mapped_column(String(128))
     data: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+    versions: Mapped[list[AssetVersion]] = relationship(
+        back_populates="asset", order_by="AssetVersion.version", cascade="all, delete-orphan"
+    )
+
+
+class AssetVersion(Base):
+    """편집 버전 (D-027). e0 = 라벨 회전만, e{n} = e0 + 사용자 op. append-only."""
+
+    __tablename__ = "asset_versions"
+    __table_args__ = (UniqueConstraint("asset_id", "version"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(16), index=True)  # pending|running|ready|failed
+    kind: Mapped[str] = mapped_column(String(16))  # base | edit | undo | revert
+    ops: Mapped[list] = mapped_column(JSON)  # 월드 op 전체 (label 포함)
+    intent: Mapped[dict] = mapped_column(JSON, default=dict)  # 패널·문장·화면 op (표시용)
+    prev_state: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    message: Mapped[str] = mapped_column(Text, default="")
+    result: Mapped[dict] = mapped_column(JSON, default=dict)  # 파일·충돌체·QC
+    error: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+    asset: Mapped[Asset] = relationship(back_populates="versions")
