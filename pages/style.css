@@ -231,7 +231,7 @@ table.diff code { font-size: 10.5px; background: none; padding: 0; color: #8a949
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-2); font-weight: 600; }
 .field small { font-weight: 400; }
 .chat { max-height: 240px; min-height: 64px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; background: var(--bg); border-radius: 10px; padding: 8px; margin-bottom: 8px; }
-.chat:empty::before { content: "예: \"옆으로 누워 있어, 세워줘\", \"더 두껍게\", \"옆으로 2배 길게\""; font-size: 12px; color: var(--ink-2); }
+.chat:empty::before { content: "옆 패널을 고르고: \"가장자리 둥글게\", \"볼록하게\", \"위로 갈수록 얇게\" · 방향·크기: \"세워줘\", \"더 두껍게\""; font-size: 12px; color: var(--ink-2); }
 .msg { font-size: 13px; padding: 6px 10px; border-radius: 10px; background: var(--paper); align-self: flex-start; max-width: 92%; line-height: 1.45; }
 .msg.user { align-self: flex-end; background: #f3e3cc; }
 .msg.ok { background: var(--ok-bg); color: var(--ok); }

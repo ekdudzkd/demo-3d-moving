@@ -1,10 +1,11 @@
-// 한국어 규칙 기반 Mock 플래너 — backend/app/edit/planner.py MockPlanner를 그대로 옮긴 것.
+// 한국어 규칙 기반 Mock 플래너 — backend/app/edit/planner.py MockPlanner를 옮긴 것.
 // 문장 → 화면 기준 op. 월드 축 변환·범위 검사는 edit.js(resolve)가 한다.
 // 기대값: backend/tests/fixtures/edit_cases.json "planner" (Python과 같은 표).
+// 데모 추가(D-029): 두께 단면 문장(둥글게·볼록하게·위로 갈수록 얇게·평평하게)은 아직 JS에만 있다.
 
 import { MAX_FACTOR, MIN_FACTOR } from "./edit.js";
 
-export const EXAMPLES = "예: '세워줘', '더 두껍게', '옆으로 2배 길게', '시계방향으로 90도 돌려', '좌우 반전'";
+export const EXAMPLES = "예: '세워줘', '더 두껍게', '가장자리 둥글게', '위로 갈수록 얇게', '옆으로 2배 길게', '시계방향으로 90도 돌려', '좌우 반전'";
 
 const PARTS = ["귀", "다리", "팔", "머리", "꼬리", "바퀴", "손잡이", "눈", "코", "입", "날개", "뿔",
   "지붕", "문", "창문", "손", "발", "목", "몸통", "얼굴", "부리", "줄기", "잎", "뚜껑"];
@@ -37,8 +38,33 @@ const clauses = (text) => text.split(/[,.\n]|그리고|그다음|그 다음|하�
 /** planner.py PlanResult의 op 스키마 검사 (factor 범위, k 범위) */
 function validOp(op) {
   if ("factor" in op && !(op.factor >= MIN_FACTOR && op.factor <= MAX_FACTOR)) return false;
+  if ("ratio" in op && !(op.ratio >= MIN_FACTOR && op.ratio <= MAX_FACTOR)) return false;
   if ("k" in op && !(Number.isInteger(op.k) && op.k !== 0 && op.k >= -3 && op.k <= 3)) return false;
   return true;
+}
+
+const THICK = ["두껍", "두툼", "굵"];
+const THIN = ["얇", "가늘", "날씬"];
+const END_WORD = /위|윗|아래|아랫|밑|왼|오른/;
+
+/** 두께 단면 문장 (D-029). 해당 없으면 null */
+function profileClause(t) {
+  if (has(t, ["평평", "각지게", "각진", "원래 두께"])) return [{ type: "flatten" }];
+  const amount = has(t, ["많이", "훨씬", "아주", "엄청"]) ? 0.8 : has(t, ["조금", "살짝", "약간"]) ? 0.35 : 0.6;
+  if (has(t, ["볼록", "부풀", "빵빵"])) return [{ type: "round", mode: "bulge", amount }];
+  if (has(t, ["둥글", "둥그렇", "동글", "모서리", "가장자리", "테두리"])) return [{ type: "round", mode: "edge", amount }];
+
+  // "위로 갈수록 얇게", "아래는 두껍게", "오른쪽을 얇게": 한쪽 끝의 두께를 다르게
+  const at = t.search(END_WORD);
+  if (at < 0 || !(has(t, THICK) || has(t, THIN))) return null;
+  const word = t.slice(at).match(END_WORD)[0];
+  const rest = t.slice(at);
+  const first = (words) => Math.min(...words.map((w) => rest.indexOf(w)).filter((i) => i >= 0), Infinity);
+  const thin = first(THIN) < first(THICK);
+  const m = t.match(/(\d+(?:\.\d+)?)\s*배/);
+  const f = m ? Number(m[1]) : has(t, ["많이", "훨씬", "아주", "엄청"]) ? 3 : has(t, ["조금", "살짝", "약간"]) ? 1.5 : 2;
+  const positiveEnd = ["위", "윗", "오른"].includes(word);
+  return [{ type: "taper", axis: ["위", "윗", "아래", "아랫", "밑"].includes(word) ? "screen_up" : "screen_right", ratio: positiveEnd === thin ? 1 / f : f }];
 }
 
 function clause(t) {
@@ -73,6 +99,8 @@ function clause(t) {
     return [{ type: "rotate90", axis, k }];
   }
   if (has(t, ["눕혀", "눕게", "넘어뜨려"])) return [{ type: "rotate90", axis: "toward_viewer", k: -1 }];
+  const profile = profileClause(t);
+  if (profile) return profile;
 
   let up = has(t, INCREASE);
   const down = has(t, DECREASE);
@@ -93,7 +121,7 @@ export function planEdit(rawText) {
   const text = rawText.trim();
   if (!text) return { kind: "clarify", ops: [], message: `어떻게 바꿀지 적어 주세요. ${EXAMPLES}` };
   if (has(text, SHAPE_EDIT)) {
-    return { kind: "refuse", ops: [], reason_code: "out_of_scope", message: "모양을 더하거나 빼는 편집은 아직 못 해요. 돌리기·크기·반전만 할 수 있어요." };
+    return { kind: "refuse", ops: [], reason_code: "out_of_scope", message: "모양을 더하거나 빼는 편집은 아직 못 해요. 돌리기·크기·반전·두께 모양(둥글게·위로 갈수록 얇게)만 할 수 있어요." };
   }
   if (has(text, COLOR)) return { kind: "refuse", ops: [], reason_code: "out_of_scope", message: "색 바꾸기는 아직 못 해요." };
   const part = partMentioned(text);
