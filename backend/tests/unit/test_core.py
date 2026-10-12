@@ -1,3 +1,7 @@
+import subprocess
+import sys
+from pathlib import Path
+
 from app.core.errors import ErrorCode, PipelineError
 from app.db.models import Project
 
@@ -16,6 +20,23 @@ def test_database_created(ctx):
         s.add(Project(status="UPLOADED", width=1, height=1, validation={}))
         s.commit()
         assert s.query(Project).count() == 1
+
+
+def test_concurrent_startup_on_new_database(tmp_path):
+    # dev-backend.sh는 API와 워커를 동시에 띄운다: 새 DB에서 둘 다 테이블을 만들어도 실패하지 않아야 한다
+    code = "import sys; from app.db.session import make_engine; make_engine(sys.argv[1])"
+    backend = Path(__file__).resolve().parents[2]
+    for run in range(3):
+        url = f"sqlite:///{tmp_path / f'db{run}.sqlite'}"
+        procs = [
+            subprocess.Popen(
+                [sys.executable, "-c", code, url], cwd=backend, stderr=subprocess.PIPE, text=True
+            )
+            for _ in range(3)
+        ]
+        for p in procs:
+            _, err = p.communicate(timeout=60)
+            assert p.returncode == 0, err
 
 
 def test_files_serves_only_inside_projects(client, ctx):

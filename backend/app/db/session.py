@@ -21,9 +21,21 @@ def make_engine(url: str) -> Engine:
             cur.execute("PRAGMA foreign_keys=ON")
             cur.close()
 
-    Base.metadata.create_all(engine)
+    _create_tables(engine)
     return engine
 
 
 def make_sessionmaker(engine: Engine) -> sessionmaker:
     return sessionmaker(engine, expire_on_commit=False)
+
+
+def _create_tables(engine: Engine) -> None:
+    if engine.dialect.name != "sqlite":
+        Base.metadata.create_all(engine)
+        return
+    # 새 DB에서 API 서버와 워커가 동시에 시작하면 서로 checkfirst 검사 후 같은 테이블을 만들려다
+    # "already exists"로 실패한다. 배타 잠금 안에서 검사·생성해 직렬화한다(대기는 busy_timeout).
+    with engine.connect() as conn:
+        conn.exec_driver_sql("BEGIN EXCLUSIVE")
+        Base.metadata.create_all(conn)
+        conn.commit()
