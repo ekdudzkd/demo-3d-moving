@@ -151,6 +151,27 @@
           <button class="primary" id="toWorld">월드로 보내기 →</button>
         </div>
       </div>
+
+      <div class="card" id="editCard" hidden>
+        <h2>5. 6방향 보기·편집 <span class="tag">Mock 규칙</span></h2>
+        <p class="hint edit-note">뒷면·옆면은 그림 한 장으로 추정한 모양입니다. 오른쪽 <b>6방향 편집</b> 뷰에서 패널을 고르고 그 화면 기준으로 말하면 물체 전체의 방향·두께·크기를 고칩니다. 점선 상자는 처음(e0) 크기입니다.</p>
+        <label class="field">그림 방향 <small>입력 그림이 물체를 어느 쪽에서 본 모습인가요? 바꾸면 e0부터 다시 시작합니다.</small>
+          <select id="viewLabel" aria-label="그림 방향"></select>
+        </label>
+        <h3>말로 고치기 <small id="editPanelName"></small></h3>
+        <div class="chat" id="editChat" aria-live="polite" data-testid="edit-chat"></div>
+        <div class="chips" id="editChips"></div>
+        <form class="chatform" id="editForm">
+          <input id="editText" aria-label="편집 요청" autocomplete="off" placeholder="예: 옆으로 누워 있어, 세워줘">
+          <button class="primary" type="submit">보내기</button>
+        </form>
+        <h3>버전 <small>append-only · 되돌리기도 새 버전으로 남습니다</small></h3>
+        <ol class="versions" id="editVersions" data-testid="edit-versions"></ol>
+        <div class="row">
+          <button class="ghost" id="editUndo">되돌리기</button>
+          <button class="primary" id="editToWorld">월드에서 보기 →</button>
+        </div>
+      </div>
     </section>
 
     <section class="panel stage" aria-label="3D 뷰">
@@ -159,9 +180,11 @@
           <button class="vt" data-view="raw">원본 메시</button>
           <button class="vt" data-view="repaired">보정 메시</button>
           <button class="vt active" data-view="world">월드</button>
+          <button class="vt" data-view="edit">6방향 편집</button>
         </div>
         <div class="viewport" id="viewport">
           <div class="busy" id="busy" hidden><div class="spinner"></div><span id="busyText">준비 중…</span></div>
+          <div class="editgrid" id="editGrid" role="radiogroup" aria-label="패널 선택" hidden></div>
           <div class="hud" id="hud">
             <div class="score" id="score"></div>
             <div class="help" id="help"></div>

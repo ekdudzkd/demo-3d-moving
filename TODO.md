@@ -10,15 +10,7 @@
 | 5-2 | 버전 모델 + API (append-only 이력·undo 체인·실패 버전·asset SSE) | ✅ 완료 |
 | 5-3 | EditPlanner (Mock 한국어 규칙 + Claude 구조화 출력 adapter) | ✅ 완료 |
 | 5-4 | 프론트 6패널 편집 화면 | ✅ 완료 |
-| 5-5 | pages 데모 적용 | 🟡 진행중 |
-
-## 5-5 pages 데모
-
-- [ ] `pages/`에서 `backend/app/edit/basis.json`을 공유(배포 시 복사 단계 또는 빌드 스크립트)
-- [ ] JS 편집 코어: 라벨 회전·화면 op → 월드 op·합성·바닥 맞춤·stand_up·범위 검사 (Python `compose.py`와 같은 규칙)
-- [ ] JS Mock 플래너(한국어 규칙) — 5-3 테스트 문장 표를 JSON 픽스처로 빼서 Python·JS가 같은 표로 테스트
-- [ ] 6패널 정사영 뷰 + 채팅 + 버전 목록을 데모 UI에 추가
-- [ ] 교차 언어 테스트(같은 기대 행렬) + 브라우저 수동 확인
+| 5-5 | pages 데모 적용 | ✅ 완료 |
 
 ## 설계 리뷰에서 남은 정리 항목 (minor, 구현하며 반영)
 
@@ -33,4 +25,3 @@
 - [ ] ClaudePlanner 실제 API 호출 확인 (`EDIT_PLANNER=claude`, `pip install '.[llm]'`, API 키) — 5-3 Mock 문장 표로 정확도 측정
 - [ ] 2차 의견의 증명 실험: 합성 물체 6방향 렌더 → 라벨별 생성 → 6방향 실루엣 IoU·종횡비 오차 비교 (4-4 비교표에 행 추가)
 - [ ] v2 후보: 측면 패널에 윤곽 덧그리기(실루엣 기반 축별 scale), 부분 선택 변형, 다중 시점 입력
-- [ ] `docs/status.md`에 5단계 요약 반영

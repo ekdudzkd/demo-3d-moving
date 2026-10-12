@@ -1,10 +1,10 @@
-# 진행 현황과 다음 할 일 (2026-10-11 기준)
+# 진행 현황과 다음 할 일 (2026-10-12 기준)
 
 세부 상태와 작업별 로그는 [`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md), 결정은 [`decision-log.md`](decision-log.md), 측정 결과는 [`experiments.md`](experiments.md)가 기준이다. 이 문서는 그 요약이다.
 
 ## 한 줄 요약
 
-계획표 27개 작업 중 26개 완료. 남은 것은 3-4(SF3D, 라이선스 동의 대기) 하나. GitHub Actions CI 5개 잡(backend·frontend·e2e·mesh-ready-check·repo-hygiene) 모두 통과.
+계획표 32개 작업 중 31개 완료. 남은 것은 3-4(SF3D, 라이선스 동의 대기) 하나. 5단계(6방향 뷰 + 자연어 전체 변환 편집)까지 끝났다. GitHub Actions CI 5개 잡(backend·frontend·e2e·mesh-ready-check·repo-hygiene)과 Pages 배포가 `main` push마다 돈다.
 
 ## 지금까지 한 일
 
@@ -33,9 +33,16 @@
 - `evals/compare.py` 비교표. EXP-002 GrabCut → SAM 2: 사용 가능률 0.9→1.0, 마스크 IoU 0.838→0.911, 배경 포함률 0.090→0.007.
 - 보고서 화면에 실패 유형 한글 이름, 고치는 버튼("마스크 다시 편집", "텍스처 굽기로 다시 생성"), 정면 모양 일치율.
 
+### 5단계 — 6방향 뷰 + 자연어 전체 변환 편집 (설계: `docs/designs/view-and-edit.md`)
+- 편집 코어(`backend/app/edit/`): 패널 기준표 `basis.json`(Python·TS·JS 공용), 그림 방향 라벨 회전, 90° 회전·축별 크기·반전·세우기·반대로, 범위 검사(축별 0.1~10배, 비율 20).
+- 버전: append-only, undo·revert도 새 버전, 실패 버전은 활성 유지. 워커가 v0에서 다시 계산(오차 누적 없음).
+- EditPlanner: Mock 한국어 규칙(기본·CI) + Claude 구조화 출력 adapter(`EDIT_PLANNER=claude`). 부분 편집·모양/색 변경·45° 등은 추측하지 않고 거절·질문.
+- 화면 `/jobs/:id/edit`: 고정 범위 정사영 6패널·e0 점선 상자·채팅·버전 목록. E2E(세워줘→두껍게→undo).
+- Pages 데모에도 같은 규칙을 JS로 옮겨 적용(`pages/edit.js`·`planner.js`). 기대값은 `backend/tests/fixtures/edit_cases.json` 하나를 Python·JS가 같이 검사.
+
 ### CI (GitHub Actions)
-- `ci.yml`: 금지 파일 검사, mesh-ready-check, 백엔드(ruff·pytest·평가셋·benchmark 스모크·서버 실제 기동 스모크·OpenAPI 계약), 프론트(타입 생성 일치·typecheck·vitest·build), Playwright E2E. 수동 실행(workflow_dispatch) 가능.
-- `deploy-pages.yml`: 프로젝트 소개 페이지 배포.
+- `ci.yml`: 금지 파일 검사, mesh-ready-check, 백엔드(ruff·pytest·평가셋·benchmark 스모크·서버 실제 기동 스모크·OpenAPI 계약), 프론트(타입 생성 일치·typecheck·vitest·build·Pages 편집 코어 교차 언어 테스트), Playwright E2E. 수동 실행(workflow_dispatch) 가능.
+- `deploy-pages.yml`: `main` push마다 브라우저 데모 배포(`backend/app/edit/basis.json`을 복사해 함께 올림). 같은 그룹의 이전 배포는 취소되고 마지막 push가 반영된다.
 - 4-3 이후 CI가 실패하던 문제 수정(51f866f): 합성 그림이 없는 깨끗한 checkout에서 benchmark가 안 쓰는 파일까지 검사하던 것.
 
 ## 알려진 한계
@@ -44,7 +51,8 @@
 - 가는 선 그림(막대 사람)은 TripoSR이 일부만 살린다 (정면 모양 일치 59%). 분할이 아니라 생성 모델의 한계.
 - TripoSR은 seed와 관계없이 같은 결과를 낸다. "다시 생성"으로는 결과가 바뀌지 않는다.
 - 평가는 코드로 만든 합성 그림 10장 + 공개 샘플 3장뿐. 실제 손그림으로는 검증 안 됨.
-- 실행은 로컬 GPU 서버에서만 가능. GitHub Pages는 정적 소개 페이지뿐.
+- 실제 모델 실행은 로컬 GPU 서버에서만 가능. GitHub Pages 데모는 Mock 실루엣 돌출 + 6방향 편집을 브라우저 안에서만 돌린다(버전은 새로고침하면 사라짐).
+- 6방향 편집은 물체 전체 변환(회전·크기·반전)만. 부분 편집·모양 추가는 v2 후보.
 
 ## 다음 할 일
 
@@ -62,5 +70,5 @@
 
 ## 실행 방법 (요약)
 
-- CI와 같은 확인: `pytest -q` (backend), `pytest -q evals`, `npm test` (frontend), `bash scripts/smoke_stage1.sh`.
+- CI와 같은 확인: `pytest -q` (backend), `pytest -q evals`, `npm test` (frontend), `node --test "pages/tests/*.test.mjs"` (Pages 편집 코어), `bash scripts/smoke_stage1.sh`.
 - 로컬 플레이(GPU): WSL venv에서 `SEGMENTER=sam2 GENERATOR=triposr bash scripts/dev-backend.sh` + `cd frontend && npm run dev` → http://127.0.0.1:5391. 자세한 설정은 [`gpu-setup.md`](gpu-setup.md).

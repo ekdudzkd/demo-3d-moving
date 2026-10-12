@@ -226,6 +226,39 @@ table.diff code { font-size: 10.5px; background: none; padding: 0; color: #8a949
 .toast { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(37, 50, 59, .92); color: #fff; padding: 14px 20px; border-radius: 14px; font-weight: 700; pointer-events: none; animation: pop 2.2s forwards; text-align: center; }
 @keyframes pop { 0% { opacity: 0; transform: translate(-50%, -40%); } 15%, 80% { opacity: 1; transform: translate(-50%, -50%); } 100% { opacity: 0; } }
 
+/* 6방향 편집 */
+.edit-note { margin: 0 0 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-2); font-weight: 600; }
+.field small { font-weight: 400; }
+.chat { max-height: 240px; min-height: 64px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; background: var(--bg); border-radius: 10px; padding: 8px; margin-bottom: 8px; }
+.chat:empty::before { content: "예: \"옆으로 누워 있어, 세워줘\", \"더 두껍게\", \"옆으로 2배 길게\""; font-size: 12px; color: var(--ink-2); }
+.msg { font-size: 13px; padding: 6px 10px; border-radius: 10px; background: var(--paper); align-self: flex-start; max-width: 92%; line-height: 1.45; }
+.msg.user { align-self: flex-end; background: #f3e3cc; }
+.msg.ok { background: var(--ok-bg); color: var(--ok); }
+.msg.warn { background: var(--warn-bg); color: #6b4a12; }
+.msg.error { background: var(--err-bg); color: var(--err); }
+.msg button { margin-left: 6px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 999px; padding: 1px 8px; font-size: 12px; cursor: pointer; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.chips button { border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.chips button:hover { border-color: var(--ink); }
+.chatform { display: flex; gap: 8px; }
+.chatform input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 14px; }
+.chatform button { flex: none; }
+.versions { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.versions li { display: flex; gap: 8px; align-items: center; font-size: 12.5px; padding: 6px 8px; border-radius: 8px; background: var(--bg); }
+.versions li.active { background: #f7ead6; box-shadow: inset 0 0 0 2px var(--accent); }
+.versions li em { font-style: normal; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: var(--paper); color: var(--ink-2); flex: none; }
+.versions li em.failed { background: var(--err-bg); color: var(--err); }
+.versions .vtext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.versions li button { flex: none; border: 1px solid var(--line); background: var(--paper); border-radius: 8px; padding: 2px 8px; font-size: 12px; cursor: pointer; }
+.editgrid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: 6px; padding: 6px; z-index: 2; }
+.pcell { display: flex; flex-direction: column; border: 2px solid var(--line); border-radius: 10px; background: transparent; padding: 0; cursor: pointer; overflow: hidden; text-align: left; color: var(--ink); }
+.pcell[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(163, 107, 37, .25); }
+.pcell .ph { display: flex; gap: 6px; align-items: center; padding: 4px 8px; font-size: 12px; background: rgba(255, 253, 248, .94); border-bottom: 1px solid var(--line); }
+.pcell .ph em { font-style: normal; font-size: 10px; font-weight: 700; background: var(--warn-bg); color: var(--warn); border-radius: 999px; padding: 1px 6px; }
+.pcell .ph small { margin-left: auto; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.pcell .pv { flex: 1; }
+
 .foot { max-width: 1320px; margin: 28px auto 0; padding: 18px 20px 36px; color: var(--ink-2); font-size: 12px; border-top: 1px solid var(--line); }
 .foot p { margin: 4px 0; }
 
@@ -246,6 +279,8 @@ table.diff code { font-size: 10.5px; background: none; padding: 0; color: #8a949
   .opt-grid { grid-template-columns: 1fr; }
   .help { display: none; }
   .legend { margin-left: 0; width: 100%; }
+  .editgrid { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(3, 1fr); }
+  .vt { padding: 8px 4px; font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }

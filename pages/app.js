@@ -3,7 +3,9 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
 import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
+import { EditSession, PANEL_NAMES, PANEL_ORDER, createEditCore, viewSpan } from "./edit.js";
 import * as P from "./pipeline.js";
+import { planEdit } from "./planner.js";
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -53,7 +55,15 @@ const METRIC_LABEL = {
   winding_consistent: "면 방향 일관",
 };
 
-const state = { busy: false, seed: 0, result: null, view: "world", lastImage: null, lastLabel: "" };
+const state = { busy: false, seed: 0, result: null, view: "world", lastImage: null, lastLabel: "", edit: null };
+
+// 패널 기준표는 백엔드와 같은 파일 (배포 때 backend/app/edit/basis.json을 복사)
+const editCorePromise = fetch("basis.json")
+  .then((r) => {
+    if (!r.ok) throw new Error(`basis.json HTTP ${r.status}`);
+    return r.json();
+  })
+  .then(createEditCore);
 
 // ---------------------------------------------------------------------------
 // 단계 표시
@@ -274,12 +284,13 @@ async function run(imageData, label) {
     step = "world";
     if (!repairedReport.is_usable) {
       // 생성 성공 ≠ 자산 사용 가능: 사용 불가 판정이면 월드에 넣지 않는다
+      stopEditing();
       showError("보정 후에도 사용 불가 판정입니다. 월드에 배치하지 않습니다. 다른 그림으로 시도해 주세요.");
       setView("repaired");
     } else {
       setStep("world", "active");
       await pause(120);
-      spawnPlayer(state.result);
+      await startEditing(state.result);
       setView("world");
       setStep("world", "done");
     }
@@ -678,23 +689,30 @@ const player = {
 player.root.add(player.tilt);
 worldScene.add(player.root);
 
-function spawnPlayer(res) {
+/** 월드에 자산을 둔다. respawn=false면 편집 버전만 바꾸고 위치·보석은 그대로 둔다. */
+function spawnPlayer(meshData, collider, respawnPlayer = true) {
   disposeGroup(player.tilt);
-  const geom = meshGeometry(res.repair.mesh);
+  const geom = meshGeometry(meshData);
   const mesh = new THREE.Mesh(geom, objectMaterial);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   const wire = new THREE.Mesh(geom, wireMaterial);
   wire.name = "wire";
-  const col = colliderHelpers({ ...res.collider, points: null });
+  const col = colliderHelpers({ ...collider, points: null });
   player.tilt.add(mesh, wire, col);
   player.tilt.scale.setScalar(WORLD_SCALE);
-  const [hx, hy, hz] = res.collider.box.half_extents;
+  const [hx, hy, hz] = collider.box.half_extents;
   player.half = [hx * WORLD_SCALE, hy * WORLD_SCALE, hz * WORLD_SCALE];
   player.height = hy * 2 * WORLD_SCALE;
   player.ready = true;
-  respawn();
-  resetGems();
+  if (respawnPlayer) {
+    respawn();
+    resetGems();
+  } else {
+    // 크기가 바뀌었을 수 있으니 살짝 띄워 다시 착지시킨다
+    player.pos.y += 0.6;
+    player.onGround = false;
+  }
   applyViewOptions();
 }
 function respawn() {
@@ -896,21 +914,25 @@ const HELP = {
   repaired: "보정 후: 최대 축 1m, 원점 중앙, 바닥(y=0)에 놓임 · 빨간 상자/파란 망 = 충돌체",
 };
 function setView(v) {
+  if (v === "edit" && !state.edit) v = "world";
   state.view = v;
   $$(".vt").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
   $("#pad").hidden = v !== "world" || !player.ready;
-  $("#help").textContent = v === "world" && !player.ready ? "그림을 변환하면 여기에 등장합니다" : HELP[v];
+  $("#editGrid").hidden = v !== "edit";
+  $("#help").textContent = v === "world" && !player.ready ? "그림을 변환하면 여기에 등장합니다" : HELP[v] ?? "";
   inspectObjects.raw.visible = v === "raw";
   inspectObjects.repaired.visible = v === "repaired";
   const r = state.result;
   const rep = r && (v === "raw" ? r.rawReport : r.repairedReport);
   $("#legend").textContent = rep ? `${v === "raw" ? "원본" : "보정본"} · 정점 ${fmt(rep.vertex_count)} · 면 ${fmt(rep.face_count)}` : "";
-  if (v === "world" && r) $("#legend").textContent = `월드 배율 ×${WORLD_SCALE} · 충돌체: 상자`;
+  if (v === "world" && r) $("#legend").textContent = `월드 배율 ×${WORLD_SCALE} · 충돌체: 상자${state.edit ? ` · 편집 e${state.edit.session.active}` : ""}`;
+  if (v === "edit") $("#legend").textContent = `패널마다 고정 범위 정사영 · 현재 e${state.edit.session.active}`;
   if (!controls) return;
+  controls.enabled = v !== "edit";
   if (v === "world") {
     controls.autoRotate = false;
     frameWorldCamera(true);
-  } else {
+  } else if (v !== "edit") {
     controls.autoRotate = true;
     controls.autoRotateSpeed = 1.6;
     frameInspect(inspectObjects[v]);
@@ -959,6 +981,247 @@ $("#wire").addEventListener("change", applyViewOptions);
 $("#showCollider").addEventListener("change", applyViewOptions);
 
 // ---------------------------------------------------------------------------
+// 6방향 보기·편집 (edit.js 코어 + planner.js Mock 규칙, 버전은 브라우저 메모리)
+// ---------------------------------------------------------------------------
+const QUICK_PROMPTS = ["세워줘", "더 두껍게", "더 얇게", "시계방향으로 90도 돌려", "좌우 반전", "반대로"];
+const LABEL_HINTS = {
+  front: "물체를 앞에서 본 그림",
+  back: "물체를 뒤에서 본 그림",
+  left: "앞에서 볼 때 왼쪽 옆면",
+  right: "앞에서 볼 때 오른쪽 옆면",
+  top: "위에서 내려다본 그림 (실험 기능)",
+  bottom: "아래에서 올려다본 그림 (실험 기능)",
+};
+const KIND_LABEL = { base: "기본", edit: "편집", undo: "되돌리기", revert: "복귀" };
+
+const editScene = new THREE.Scene();
+editScene.background = new THREE.Color(0xfaf8f3);
+editScene.add(new THREE.HemisphereLight(0xffffff, 0xb8a98f, 1.3));
+const editKey = new THREE.DirectionalLight(0xffffff, 1.4);
+editKey.position.set(3, 5, 2);
+const editFill = new THREE.DirectionalLight(0xffffff, 0.6);
+editFill.position.set(-3, -2, -2);
+editScene.add(editKey, editFill);
+const editObjects = new THREE.Group();
+editScene.add(editObjects);
+const editCamera = new THREE.OrthographicCamera();
+const panelCells = {};
+
+for (const panel of PANEL_ORDER) {
+  const cell = document.createElement("button");
+  cell.type = "button";
+  cell.className = "pcell";
+  cell.setAttribute("role", "radio");
+  cell.dataset.panel = panel;
+  cell.setAttribute("aria-label", `${PANEL_NAMES[panel]} 패널`);
+  cell.innerHTML = `<div class="ph"><b>${PANEL_NAMES[panel]}</b><em hidden>입력 그림</em><small></small></div><div class="pv"></div>`;
+  cell.addEventListener("click", () => selectPanel(panel));
+  $("#editGrid").append(cell);
+  panelCells[panel] = cell;
+}
+
+function selectPanel(panel) {
+  if (!state.edit) return;
+  state.edit.panel = panel;
+  for (const [p, cell] of Object.entries(panelCells)) cell.setAttribute("aria-checked", String(p === panel));
+  $("#editPanelName").textContent = `· ${PANEL_NAMES[panel]} 패널 기준`;
+  $("#editText").placeholder = `${PANEL_NAMES[panel]} 화면 기준으로 말해 주세요`;
+}
+
+for (const q of QUICK_PROMPTS) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = q;
+  b.addEventListener("click", () => sendEdit(q));
+  $("#editChips").append(b);
+}
+
+function say(text, tone = "", suggested = null) {
+  const m = document.createElement("div");
+  m.className = `msg ${tone}`;
+  m.textContent = text;
+  if (suggested) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = `"${suggested}"로 고쳐 쓰기`;
+    b.addEventListener("click", () => {
+      $("#editText").value = suggested;
+      $("#editText").focus();
+    });
+    m.append(b);
+  }
+  $("#editChat").append(m);
+  $("#editChat").scrollTop = $("#editChat").scrollHeight;
+}
+
+function versionText(v) {
+  if (v.kind === "base") return `입력 그림 기준 (${v.intent.label})`;
+  if (v.kind === "undo") return `e${v.intent.undo_of} 되돌림 → e${v.intent.to} 상태`;
+  if (v.kind === "revert") return `e${v.intent.revert_to} 상태로 복귀`;
+  return v.intent.text || `${v.intent.screen_ops?.length ?? 0}개 op`;
+}
+
+function stopEditing() {
+  state.edit = null;
+  $("#editCard").hidden = true;
+  clearEditObjects();
+}
+
+function clearEditObjects() {
+  // 격자·점선 상자 재질은 갱신마다 새로 만들므로 함께 해제한다 (메시 재질은 공용)
+  editObjects.traverse((o) => o.material && o.material !== objectMaterial && o.material.dispose());
+  disposeGroup(editObjects);
+}
+
+/** 보정 메시를 v0으로 e0을 만들고 월드에 활성 버전을 둔다 */
+async function startEditing(res) {
+  const core = await editCorePromise.catch((e) => {
+    throw new Error(`편집 기준표(basis.json)를 불러오지 못했습니다: ${e.message}`);
+  });
+  const label = $("#viewLabel").value || "front";
+  const session = new EditSession(core, res.repair.mesh, label, { faceBudget: Number($("#budget").value) });
+  state.edit = { core, session, panel: label };
+  $("#editChat").replaceChildren();
+  $("#editCard").hidden = false;
+  for (const [p, cell] of Object.entries(panelCells)) cell.querySelector("em").hidden = p !== label;
+  selectPanel(label);
+  refreshEdit(true);
+}
+
+/** 버전 목록·6패널 장면·월드 자산을 활성 버전으로 맞춘다 */
+function refreshEdit(respawnPlayer = false) {
+  const { session } = state.edit;
+  const active = session.activeVersion;
+  const e0 = session.versions[0];
+  $("#editCard").dataset.active = `e${session.active}`;
+  $("#editUndo").disabled = !session.canUndo;
+  $("#editVersions").replaceChildren(
+    ...[...session.versions].reverse().map((v) => {
+      const li = document.createElement("li");
+      li.className = v.version === session.active ? "active" : "";
+      li.innerHTML = `<b>e${v.version}</b><em>${KIND_LABEL[v.kind]}</em><span class="vtext"></span>${v.status === "failed" ? `<em class="failed">실패</em>` : ""}`;
+      li.querySelector(".vtext").textContent = versionText(v);
+      li.querySelector(".vtext").title = versionText(v);
+      if (v.status === "ready" && v.version !== session.active) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = "이 버전으로";
+        b.addEventListener("click", () => editAction(() => session.revert(v.version), `e${v.version}로 복귀`));
+        li.append(b);
+      }
+      return li;
+    }),
+  );
+
+  clearEditObjects();
+  const span = viewSpan(e0.bounds, active.bounds);
+  state.edit.span = span;
+  for (const cell of Object.values(panelCells)) cell.querySelector("small").textContent = `범위 ${span.toFixed(2)} m`;
+  editObjects.add(new THREE.GridHelper(span * 4, 40, 0xc9b79a, 0xe4ddd0));
+  editObjects.add(new THREE.Mesh(meshGeometry(active.mesh), objectMaterial));
+  const [lo, hi] = e0.bounds;
+  const box = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])),
+    new THREE.LineDashedMaterial({ color: 0xa36b25, dashSize: span * 0.02, gapSize: span * 0.014 }),
+  );
+  box.position.set((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
+  box.computeLineDistances();
+  editObjects.add(box);
+
+  spawnPlayer(active.mesh, active.collider, respawnPlayer);
+  if (state.view === "edit" || state.view === "world") setView(state.view);
+}
+
+function editAction(fn, label) {
+  try {
+    const v = fn();
+    reportVersion(v, label);
+  } catch (e) {
+    say(e.message, "warn");
+  }
+  refreshEdit();
+}
+
+function reportVersion(v, label) {
+  if (v.status === "failed") say(`${label}: e${v.version} 실패 (${v.error}). 이전 상태를 그대로 쓰고 있어요.`, "error");
+  else say(`${label}: e${v.version} 적용 완료${v.qc.warnings.length ? ` (경고: ${v.qc.warnings.join(", ")})` : ""}`, "ok");
+}
+
+function sendEdit(text) {
+  const ed = state.edit;
+  if (!ed || !text.trim()) return;
+  say(`[${PANEL_NAMES[ed.panel]}] ${text}`, "user");
+  const plan = planEdit(text);
+  if (plan.kind !== "ops") {
+    say(plan.message, plan.kind === "refuse" ? "warn" : "", plan.suggested_text ?? null);
+    return;
+  }
+  const res = ed.session.edit(plan.ops, ed.panel, { text, planner: "mock", screen_ops: plan.ops });
+  $("#editText").value = "";
+  if (!res.version) {
+    say(res.message, res.kind === "refuse" ? "warn" : "");
+    return;
+  }
+  reportVersion(res.version, "편집");
+  for (const note of res.notes) say(note);
+  refreshEdit();
+}
+
+$("#editForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  sendEdit($("#editText").value);
+});
+$("#editUndo").addEventListener("click", () => state.edit && editAction(() => state.edit.session.undo(), "되돌리기"));
+$("#editToWorld").addEventListener("click", () => {
+  setView("world");
+  $("#viewport").scrollIntoView({ behavior: "smooth", block: "center" });
+});
+for (const p of PANEL_ORDER) {
+  const o = document.createElement("option");
+  o.value = p;
+  o.textContent = `${PANEL_NAMES[p]} — ${LABEL_HINTS[p]}`;
+  $("#viewLabel").append(o);
+}
+$("#viewLabel").addEventListener("change", () => {
+  if (!state.result?.repairedReport.is_usable) return;
+  startEditing(state.result)
+    .then(() => say(`그림 방향을 '${PANEL_NAMES[state.edit.session.label]}'으로 바꿔 e0부터 다시 시작했어요.`))
+    .catch((e) => showError(e.message));
+});
+
+/** 패널 칸마다 scissor로 정사영 렌더 (범위는 버전과 무관하게 고정 → 크기 변화가 보인다) */
+function renderEditPanels() {
+  const canvasRect = renderer.domElement.getBoundingClientRect();
+  renderer.setScissorTest(false);
+  renderer.setClearColor(0xe9e4da, 1);
+  renderer.clear();
+  renderer.setScissorTest(true);
+  const span = state.edit.span;
+  for (const panel of PANEL_ORDER) {
+    const r = panelCells[panel].querySelector(".pv").getBoundingClientRect();
+    const x = r.left - canvasRect.left;
+    const y = canvasRect.bottom - r.bottom;
+    if (r.width < 2 || r.height < 2) continue;
+    renderer.setViewport(x, y, r.width, r.height);
+    renderer.setScissor(x, y, r.width, r.height);
+    const { toward_viewer: t, screen_up: u } = state.edit.core.panels[panel];
+    const side = panel !== "top" && panel !== "bottom";
+    const target = new THREE.Vector3(0, side ? span * 0.4 : 0, 0);
+    editCamera.up.set(...u);
+    editCamera.position.set(target.x + t[0] * span * 4, target.y + t[1] * span * 4, target.z + t[2] * span * 4);
+    editCamera.lookAt(target);
+    const aspect = r.width / r.height;
+    const half = span / 2;
+    const [w, h] = aspect >= 1 ? [half * aspect, half] : [half, half / aspect];
+    Object.assign(editCamera, { left: -w, right: w, top: h, bottom: -h, near: 0.01, far: span * 10 });
+    editCamera.updateProjectionMatrix();
+    renderer.render(editScene, editCamera);
+  }
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, canvasRect.width, canvasRect.height);
+}
+
+// ---------------------------------------------------------------------------
 // 렌더 루프
 // ---------------------------------------------------------------------------
 const clock = new THREE.Clock();
@@ -985,7 +1248,8 @@ function loop() {
     marker.material.opacity = 0.55 + Math.sin(t * 6) * 0.3;
   }
   controls.update();
-  renderer.render(state.view === "world" ? worldScene : inspectScene, camera);
+  if (state.view === "edit") renderEditPanels();
+  else renderer.render(state.view === "world" ? worldScene : inspectScene, camera);
 }
 setView("world");
 loop();
