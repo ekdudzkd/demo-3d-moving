@@ -1,2 +1,191 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Draw2World AI</title><style>body{margin:0;background:#f4f1ea;color:#25323b;font-family:system-ui,sans-serif}.wrap{max-width:860px;margin:auto;padding:10vh 28px}small{letter-spacing:.16em;color:#a36b25}h1{font-size:clamp(48px,9vw,92px);line-height:.95;margin:18px 0}p{font-size:20px;line-height:1.7;max-width:720px}.card{margin-top:40px;padding:24px;border:1px solid #ccd2d4;border-radius:18px;background:#fff}a{color:#a36b25;font-weight:700}</style></head><body><main class="wrap"><small>SSAFY AI × OSS · PROJECT P5</small><h1>Draw2World AI</h1><p>그림 한 장에서 객체를 분리하고 3D 메시로 만든 뒤, 품질 검사와 보정을 거쳐 작은 가상 공간에서 움직이는 프로젝트입니다.</p><section class="card"><strong>현재 단계</strong><p>메시 품질 검사 패키지와 전체 파이프라인을 개발 중입니다. 웹 월드 프론트엔드가 준비되면 이 주소에서 실제 변환 흐름을 제공할 예정입니다.</p><a href="https://github.com/jngbnss/draw2world-ai">GitHub에서 구현 현황 보기 →</a></section></main></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Draw2World AI · 브라우저 데모</title>
+  <meta name="description" content="그림 한 장을 객체 분할 → 3D 메시 → 품질 검사·보정 → 작은 3D 월드까지 브라우저에서 바로 체험하는 Draw2World AI 데모">
+  <meta name="theme-color" content="#f4f1ea">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2325323b'/%3E%3Cpath d='M16 44 32 14l16 30z' fill='%23e3a14a'/%3E%3Cpath d='M32 14v30l16 0z' fill='%23a36b25'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div>
+        <strong>Draw2World AI</strong>
+        <small>SSAFY AI × OSS · P5 · 브라우저 데모</small>
+      </div>
+    </div>
+    <a class="gh" href="https://github.com/jngbnss/draw2world-ai" target="_blank" rel="noopener">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      <span>GitHub</span>
+    </a>
+  </header>
 
+  <section class="hero">
+    <h1>그림 한 장이 <em>움직이는 3D 오브젝트</em>가 되기까지</h1>
+    <p>객체 분할 → 3D 메시 생성 → 품질 검사·자동 보정 → 충돌체 → 작은 가상 월드. 저장소의 실제 파이프라인 단계를 브라우저 안에서 그대로 돌려 봅니다.</p>
+    <details class="honest">
+      <summary><b>이 데모에서 AI 모델은 돌지 않습니다</b> — 무엇이 진짜고 무엇이 대체인지 보기</summary>
+      <ul>
+        <li><b>3D 생성</b>: TripoSR(GPU) 대신 저장소의 <code>MockAdapter</code>와 같은 방식(실루엣 외곽선을 두께 있게 돌출)의 <b>로컬 기하 대체</b>입니다. 보이지 않는 뒷면을 추정하는 AI 결과가 아닙니다.</li>
+        <li><b>객체 분할</b>: SAM 2 대신 <code>foreground.py</code>의 배경색 기반 전경 추정(Lab 거리 + Otsu)과 <code>postprocess.py</code>의 마스크 정리를 옮겼습니다.</li>
+        <li><b>검사·보정·충돌체</b>: <code>mesh-ready-check</code>의 검사 항목·기준값, <code>repair.py</code>의 단계·롤백 규칙, <code>collider.py</code>를 JavaScript로 옮긴 실제 로직입니다. 단, 면 감소는 브라우저용 quadric edge collapse로 구현했습니다.</li>
+        <li>Mock처럼 <b>떠 있는 조각·원점 어긋남</b>을 일부러 섞고, 데모용으로 중복 정점·뒤집힌 면·면적 0인 면도 넣어 보정 단계가 실제로 일하는 모습을 보여 줍니다(옵션에서 끌 수 있음).</li>
+        <li>모든 처리는 이 브라우저 안에서만 이뤄지며 이미지는 어디에도 업로드되지 않습니다.</li>
+      </ul>
+    </details>
+  </section>
+
+  <ol class="stepper" id="stepper" aria-label="파이프라인 단계">
+    <li data-step="input"><span>1</span>입력</li>
+    <li data-step="segment"><span>2</span>객체 분할</li>
+    <li data-step="generate"><span>3</span>3D 생성</li>
+    <li data-step="inspect"><span>4</span>검사·보정</li>
+    <li data-step="world"><span>5</span>월드</li>
+  </ol>
+
+  <main class="layout">
+    <section class="panel controls" aria-label="입력과 결과">
+      <div class="card">
+        <div class="card-head">
+          <h2>1. 그림 고르기</h2>
+          <div class="tabs" role="tablist">
+            <button role="tab" class="tab active" data-tab="samples" aria-selected="true">샘플</button>
+            <button role="tab" class="tab" data-tab="draw" aria-selected="false">직접 그리기</button>
+            <button role="tab" class="tab" data-tab="upload" aria-selected="false">업로드</button>
+          </div>
+        </div>
+
+        <div class="tabpane" data-pane="samples">
+          <div class="samples" id="samples"></div>
+          <p class="hint">공개 샘플(CC0, <code>assets/samples/</code>). 고르면 바로 변환합니다.</p>
+        </div>
+
+        <div class="tabpane" data-pane="draw" hidden>
+          <div class="drawwrap">
+            <canvas id="drawCanvas" width="512" height="512" aria-label="그림 그리기 캔버스"></canvas>
+            <div class="drawhint" id="drawHint">여기에 하나의 물체를 그려 보세요<br><small>윤곽선만 그려도 안쪽이 채워집니다</small></div>
+          </div>
+          <div class="tools">
+            <div class="swatches" id="swatches"></div>
+            <div class="sizes" id="sizes"></div>
+            <button class="ghost" id="eraser" aria-pressed="false">지우개</button>
+            <button class="ghost" id="clearDraw">전체 지우기</button>
+          </div>
+          <button class="primary wide" id="useDrawing">이 그림으로 변환하기</button>
+        </div>
+
+        <div class="tabpane" data-pane="upload" hidden>
+          <label class="drop" id="drop">
+            <input type="file" id="file" accept="image/png,image/jpeg,image/webp">
+            <strong>이미지 선택 또는 끌어다 놓기</strong>
+            <span>단색 배경 위 물체 1개 · 투명 PNG도 가능</span>
+          </label>
+        </div>
+
+        <details class="options">
+          <summary>생성 옵션</summary>
+          <div class="opt-grid">
+            <label>생성 방식
+              <select id="mode">
+                <option value="extrude">돌출 (Mock과 동일)</option>
+                <option value="inflate">부풀리기 (둥근 변형)</option>
+              </select>
+            </label>
+            <label>면 예산
+              <select id="budget">
+                <option value="50000">50,000 (기본값)</option>
+                <option value="3000">3,000 (감소 단계 확인)</option>
+                <option value="1000">1,000 (강하게 감소)</option>
+              </select>
+            </label>
+            <label class="check"><input type="checkbox" id="artifacts" checked> 실제 모델 출력처럼 결함 섞기</label>
+          </div>
+          <button class="ghost wide" id="rerun">옵션 적용해 다시 변환</button>
+        </details>
+      </div>
+
+      <div class="card" id="segCard" hidden>
+        <h2>2. 객체 분할</h2>
+        <div class="seg">
+          <canvas id="segCanvas" width="256" height="256" aria-label="분할 결과"></canvas>
+          <dl class="kv" id="segInfo"></dl>
+        </div>
+      </div>
+
+      <div class="card" id="genCard" hidden>
+        <h2>3. 3D 생성 <span class="tag">로컬 기하 대체</span></h2>
+        <dl class="kv" id="genInfo"></dl>
+        <ul class="injected" id="injected"></ul>
+      </div>
+
+      <div class="card" id="qcCard" hidden>
+        <h2>4. 검사·보정</h2>
+        <div class="outcomes">
+          <div class="outcome" id="rawOutcome"></div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="outcome" id="repOutcome"></div>
+        </div>
+        <h3>지표 비교 <small>report/build.py DIFF_METRICS</small></h3>
+        <div class="tablewrap"><table class="diff" id="diffTable"></table></div>
+        <h3>보정 단계 <small>나빠지면 그 단계만 롤백</small></h3>
+        <ol class="steps" id="repairSteps"></ol>
+        <h3>검사 항목</h3>
+        <div class="checks" id="checks"></div>
+        <h3>충돌체 <small>collider.py</small></h3>
+        <dl class="kv" id="colliderInfo"></dl>
+        <div class="row">
+          <button class="ghost" id="downloadGlb">보정 메시 GLB 내려받기</button>
+          <button class="primary" id="toWorld">월드로 보내기 →</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel stage" aria-label="3D 뷰">
+      <div class="stage-inner">
+        <div class="viewtabs" role="tablist">
+          <button class="vt" data-view="raw">원본 메시</button>
+          <button class="vt" data-view="repaired">보정 메시</button>
+          <button class="vt active" data-view="world">월드</button>
+        </div>
+        <div class="viewport" id="viewport">
+          <div class="busy" id="busy" hidden><div class="spinner"></div><span id="busyText">준비 중…</span></div>
+          <div class="hud" id="hud">
+            <div class="score" id="score"></div>
+            <div class="help" id="help"></div>
+          </div>
+          <div class="pad" id="pad">
+            <button id="jumpBtn" aria-label="점프">점프</button>
+            <button id="resetBtn" aria-label="다시 떨어뜨리기">다시 소환</button>
+          </div>
+          <div class="err" id="err" hidden></div>
+        </div>
+        <div class="viewopts">
+          <label class="check"><input type="checkbox" id="wire"> 와이어프레임</label>
+          <label class="check"><input type="checkbox" id="showCollider"> 충돌체 표시</label>
+          <span class="legend" id="legend"></span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>Draw2World AI · SSAFY AI × OSS 프로젝트 P5 · 실제 서비스는 SAM 2 분할과 TripoSR 생성(로컬 GPU 서버)을 사용합니다.</p>
+    <p><a href="https://github.com/jngbnss/draw2world-ai" target="_blank" rel="noopener">github.com/jngbnss/draw2world-ai</a> · 3D 렌더링 three.js r160</p>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

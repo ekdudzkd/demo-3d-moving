@@ -4,8 +4,8 @@
 set -euo pipefail
 
 MAX_BYTES=$((5 * 1024 * 1024))
-# 이미지가 허용되는 경로 (팀 제작 공개 샘플, 데모 월드 텍스처, 프론트 정적 파일)
-IMAGE_ALLOW='^(assets/samples/|assets/demo-world/|frontend/public/)'
+# 이미지가 허용되는 경로 (팀 제작 공개 샘플, 데모 월드 텍스처, 프론트 정적 파일, Pages 데모용 샘플 축소본)
+IMAGE_ALLOW='^(assets/samples/|assets/demo-world/|frontend/public/|pages/samples/)'
 
 fail=0
 report() { echo "FORBIDDEN: $1 ($2)"; fail=1; }
