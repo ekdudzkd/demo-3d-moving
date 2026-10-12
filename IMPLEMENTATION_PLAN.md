@@ -226,7 +226,7 @@ data/projects/{project_id}/
 
 | ID | 작업 | 산출물 | 스모크 테스트 | 상태 |
 |---|---|---|---|---|
-| 5-1 | 편집 코어 | `backend/app/edit/` op 스키마·패널 기준표·라벨 회전·합성(4×4)·stand_up·invert_last·누적 범위 검사·no-op 판정, 공용 기준표 JSON | 6패널×op 매트릭스, mirror 면 감김·부피 부호, 텍스처 UV 유지, stand_up(원뿔·막대), 범위 밖 거절 테스트 통과 | 🟡 진행중 |
+| 5-1 | 편집 코어 | `backend/app/edit/` op 스키마·패널 기준표·라벨 회전·합성(4×4)·stand_up·invert_last·누적 범위 검사·no-op 판정, 공용 기준표 JSON | 6패널×op 매트릭스, mirror 면 감김·부피 부호, 텍스처 UV 유지, stand_up(원뿔·막대), 범위 밖 거절 테스트 통과 | ✅ 완료 |
 | 5-2 | 버전 모델 + API | 업로드 view_label, e0 생성, 편집 버전(append-only·prev_state), 워커 적용(QC target_size=None·충돌체·GLB), edits/undo/revert API, active_version·SSE | mock 흐름: e1→e2→undo→undo = e0 op, 실패 주입 → failed·active 유지, pending 중 undo 409 | ⬜ 대기 |
 | 5-3 | EditPlanner | 인터페이스(ops/refuse/clarify), MockPlanner(한국어 규칙), LLM adapter(플래그) | 공용 계약 테스트: "세워줘"·"두껍게"·"반대로"·"귀 길게"(refuse)·"45도"(refuse) | ⬜ 대기 |
 | 5-4 | 프론트 6패널 편집 | 고정 범위 ortho 6패널·e0 외곽선, 패널 선택+채팅, 버전 타임라인·undo | vitest + E2E 1개(세워줘→두껍게→undo) | ⬜ 대기 |
@@ -273,3 +273,4 @@ data/projects/{project_id}/
 | 2026-10-11 | 4-3 | ✅ 완료 | 분류기 확장: 정면 실루엣 recall<0.85 → MISSING_PART, 마스크 면적>60%·테두리 2변 이상 → BACKGROUND_LEAK, 보고서에 `signals`(실루엣 iou·recall·precision, 마스크 면적·테두리) 기록, benchmark도 같은 신호 사용. 유형별 픽스처 테스트 14개(10개 유형 + 깨끗한 메시 무분류 + 보정 해결 표시) 통과, pytest 124개·evals 12개·1단계 스모크 통과. 3-6에서 남던 degenerate_faces 경고 → 감소 뒤 면적 0 면 제거 단계 추가. non-manifold 픽스처는 검사기가 소수 비율을 INFO로 두는 설계라 모든 면에 지느러미를 붙여 만듦 |
 | 2026-10-11 | 4-4 | ✅ 완료 | `evals/compare.py`(요약 지표·미해결 실패 유형·이미지별 변화, 좋아짐/나빠짐 표시). GPU 비교 EXP-002 GrabCut vs SAM 2(합성 10장): 사용 가능률 0.9→1.0, 마스크 IoU 0.838→0.911, 배경 포함률 0.090→0.007 → `docs/experiments.md`. 보고서 화면: 실패 유형 한글 이름, 남은 문제별 행동 버튼(마스크 다시 편집 / 텍스처 굽기로 다시 생성), 정면 모양 일치(실루엣 IoU) 표시. 실서버 확인(Edge): 막대 사람 → 59% 경고색 + 마스크 편집 링크, 페이지 오류 없음. vitest 39개·typecheck, pytest 124개, evals 13개 통과. CI(GitHub Actions)는 gh 미인증으로 결과 직접 확인 못 함. 남은 점: 감소 없는 메시에서 면적 0 면 1개가 검사기 병합 기준 차이로 남음 |
 | 2026-10-11 | CI | ✅ 수정 | 4-3 이후 GitHub Actions backend 잡 실패 6회 → 원인: 합성 그림 생성 전에 `pytest evals`, benchmark가 안 쓰는 manifest 행 파일까지 검사. 선택 행만 파일 검사 + 회귀 테스트 + 단계 순서 변경(51f866f). 깨끗한 클론 재현 통과 후 실제 CI 5개 잡 통과. CI 수동 실행(workflow_dispatch)·README 배지·`docs/status.md`(요약·다음 할 일) 추가 |
+| 2026-10-12 | 5-1 | ✅ 완료 | `backend/app/edit/`(basis.json·basis·ops·compose) 추가. `test_edit_core.py` 89개 통과: 6패널 오른손 기준·라벨 회전(이미지 축→패널 축), 6패널×(회전 3축·축별 scale·mirror·균일 scale) 매트릭스, 합성 순서·바닥/중앙 맞춤·v0 불변, mirror 면 감김·부피 양수, 텍스처 UV·정점 색 유지·법선 단위 길이, stand_up(원뿔 양방향 → 넓은 쪽 아래, 대칭 막대 +90+안내, z 누움, 이미 섬 noop, 활성 버전 기준), invert_last, 누적 배율(물체 축 기준)·비율 20 거절, 이미 얇은 e0의 회전·두껍게 허용, 상쇄 op noop, 스키마 거절 7종. 백엔드 전체 pytest 213개·ruff check/format 통과 |

@@ -1,0 +1,15 @@
+{
+  "_comment": "6방향 패널 기준 (D-026). 각 패널의 화면 오른쪽·화면 위·관찰자 쪽 방향을 월드 축으로. 월드 규약: y 위, 정면 +z, 이미지 오른쪽 +x (D-022). 라벨 이름은 정면에서 본 사람 기준 카메라 위치(left = -x 쪽 카메라). Python(backend/app/edit)과 JS(pages)가 이 파일 하나를 공유한다.",
+  "panels": {
+    "front":  {"screen_right": [1, 0, 0],  "screen_up": [0, 1, 0],  "toward_viewer": [0, 0, 1]},
+    "back":   {"screen_right": [-1, 0, 0], "screen_up": [0, 1, 0],  "toward_viewer": [0, 0, -1]},
+    "left":   {"screen_right": [0, 0, 1],  "screen_up": [0, 1, 0],  "toward_viewer": [-1, 0, 0]},
+    "right":  {"screen_right": [0, 0, -1], "screen_up": [0, 1, 0],  "toward_viewer": [1, 0, 0]},
+    "top":    {"screen_right": [1, 0, 0],  "screen_up": [0, 0, -1], "toward_viewer": [0, 1, 0]},
+    "bottom": {"screen_right": [1, 0, 0],  "screen_up": [0, 0, 1],  "toward_viewer": [0, -1, 0]}
+  },
+  "labels": {
+    "stable": ["front", "back", "left", "right"],
+    "experimental": ["top", "bottom"]
+  }
+}
