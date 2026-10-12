@@ -13,7 +13,7 @@
 | 5-5 | pages 데모 적용 | ✅ 완료 |
 | 5-6 | 데모 설계도 확인 단계 + 앞쪽(진행 방향) 지정 | ✅ 완료 |
 | 5-7 | 데모 말로 두께 단면 편집 (둥글게·위로 갈수록 얇게) | ✅ 완료 |
-| 5-8 | 데모 Claude와 대화하며 편집 (본인 API 키) | 🟡 진행중 |
+| 5-8 | 데모 Claude와 대화하며 편집 (본인 API 키) | ✅ 완료 |
 
 ## 설계 리뷰에서 남은 정리 항목 (minor, 구현하며 반영)
 
@@ -25,6 +25,6 @@
 
 ## 그 밖에
 
-- [ ] ClaudePlanner 실제 API 호출 확인 (`EDIT_PLANNER=claude`, `pip install '.[llm]'`, API 키) — 5-3 Mock 문장 표로 정확도 측정
+- [ ] 실제 API 키로 Claude 대화 품질 확인 (Pages 데모 Claude 모드·백엔드 `EDIT_PLANNER=claude` 둘 다) — 5-3 Mock 문장 표로 정확도 측정. 이전 항목: ClaudePlanner 실제 API 호출 확인 (`EDIT_PLANNER=claude`, `pip install '.[llm]'`, API 키) — 5-3 Mock 문장 표로 정확도 측정
 - [ ] 2차 의견의 증명 실험: 합성 물체 6방향 렌더 → 라벨별 생성 → 6방향 실루엣 IoU·종횡비 오차 비교 (4-4 비교표에 행 추가)
 - [ ] v2 후보: 측면 패널에 윤곽 덧그리기(실루엣 기반 축별 scale), 부분 선택 변형, 다중 시점 입력

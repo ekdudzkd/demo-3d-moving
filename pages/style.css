@@ -230,6 +230,10 @@ table.diff code { font-size: 10.5px; background: none; padding: 0; color: #8a949
 .edit-note { margin: 0 0 12px; }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-2); font-weight: 600; }
 .field small { font-weight: 400; }
+.llm { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.llm-settings { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--bg); }
+.llm-settings input[type="password"] { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 13px; font-family: ui-monospace, Consolas, monospace; }
+.msg.thinking { color: var(--ink-2); font-style: italic; }
 .chat { max-height: 240px; min-height: 64px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; background: var(--bg); border-radius: 10px; padding: 8px; margin-bottom: 8px; }
 .chat:empty::before { content: "옆 패널을 고르고: \"가장자리 둥글게\", \"볼록하게\", \"위로 갈수록 얇게\" · 방향·크기: \"세워줘\", \"더 두껍게\""; font-size: 12px; color: var(--ink-2); }
 .msg { font-size: 13px; padding: 6px 10px; border-radius: 10px; background: var(--paper); align-self: flex-start; max-width: 92%; line-height: 1.45; }

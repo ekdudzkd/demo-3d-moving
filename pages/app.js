@@ -5,6 +5,7 @@ import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
 import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
 import { EditSession, HEADING_PANELS, PANEL_NAMES, PANEL_ORDER, createEditCore, headingHalfExtents, headingRotation, viewSpan } from "./edit.js";
 import * as P from "./pipeline.js";
+import { MODELS, chatWithClaude } from "./llm.js";
 import { planEdit } from "./planner.js";
 
 const $ = (s) => document.querySelector(s);
@@ -1040,7 +1041,9 @@ for (const q of QUICK_PROMPTS) {
   $("#editChips").append(b);
 }
 
+/** 채팅 한 줄. user가 아닌 말은 Claude에 보낼 대화 이력에서 assistant 쪽으로 남긴다 */
 function say(text, tone = "", suggested = null) {
+  state.edit?.history.push({ role: tone === "user" ? "user" : "assistant", text });
   const m = document.createElement("div");
   m.className = `msg ${tone}`;
   m.textContent = text;
@@ -1084,7 +1087,7 @@ async function startEditing(res) {
   });
   const label = $("#viewLabel").value || "front";
   const session = new EditSession(core, res.repair.mesh, label, { faceBudget: Number($("#budget").value) });
-  state.edit = { core, session, panel: label, heading: $("#heading").value || "front", placed: false };
+  state.edit = { core, session, panel: label, heading: $("#heading").value || "front", placed: false, history: [], thinking: false };
   disposeGroup(player.tilt);
   player.ready = false;
   setStep("world", "");
@@ -1177,15 +1180,21 @@ function reportVersion(v, label) {
 
 function sendEdit(text) {
   const ed = state.edit;
-  if (!ed || !text.trim()) return;
+  if (!ed || !text.trim() || ed.thinking) return;
+  if ($("#planner").value === "claude") return sendToClaude(text);
   say(`[${PANEL_NAMES[ed.panel]}] ${text}`, "user");
   const plan = planEdit(text);
   if (plan.kind !== "ops") {
     say(plan.message, plan.kind === "refuse" ? "warn" : "", plan.suggested_text ?? null);
     return;
   }
-  const res = ed.session.edit(plan.ops, ed.panel, { text, planner: "mock", screen_ops: plan.ops });
   $("#editText").value = "";
+  applyPlan(plan.ops, text, "mock");
+}
+
+/** 화면 op를 편집 버전으로 적용하고 결과를 채팅에 남긴다 (Mock·Claude 공용) */
+function applyPlan(ops, text, planner) {
+  const res = state.edit.session.edit(ops, state.edit.panel, { text, planner, screen_ops: ops });
   if (!res.version) {
     say(res.message, res.kind === "refuse" ? "warn" : "");
     return;
@@ -1193,6 +1202,48 @@ function sendEdit(text) {
   reportVersion(res.version, "편집");
   for (const note of res.notes) say(note);
   refreshEdit();
+}
+
+async function sendToClaude(text) {
+  const ed = state.edit;
+  const apiKey = $("#apiKey").value.trim();
+  if (!apiKey) {
+    say("Claude와 대화하려면 위에 Anthropic API 키를 넣어 주세요. 키 없이 쓰려면 대화 상대를 'Mock 규칙'으로 바꾸세요.", "warn");
+    $("#apiKey").focus();
+    return;
+  }
+  const history = ed.history.slice();
+  say(`[${PANEL_NAMES[ed.panel]}] ${text}`, "user");
+  $("#editText").value = "";
+  const active = ed.session.activeVersion;
+  const size = [0, 1, 2].map((k) => +(active.bounds[1][k] - active.bounds[0][k]).toFixed(3));
+  const st = {
+    panel: ed.panel,
+    size_m: { x: size[0], y: size[1], z: size[2] },
+    edits: active.ops.filter((o) => o.op !== "label"),
+    version: `e${active.version}`,
+  };
+  const thinking = document.createElement("div");
+  thinking.className = "msg thinking";
+  thinking.textContent = "Claude가 생각하는 중…";
+  $("#editChat").append(thinking);
+  $("#editChat").scrollTop = $("#editChat").scrollHeight;
+  ed.thinking = true;
+  $("#editCard").dataset.thinking = "true";
+  try {
+    const model = $("#model").value;
+    const r = await chatWithClaude({ apiKey, model, history, text: `[${ed.panel} 패널] ${text}`, state: st });
+    thinking.remove();
+    if (state.edit !== ed) return; // 그 사이 다른 그림으로 바뀜
+    say(r.reply || "(답 없음)", r.kind === "refuse" ? "warn" : "");
+    if (r.kind === "ops") applyPlan(r.ops, text, `claude:${model}`);
+  } catch (e) {
+    thinking.remove();
+    say(e.message, "error");
+  } finally {
+    ed.thinking = false;
+    delete $("#editCard").dataset.thinking;
+  }
 }
 
 $("#editForm").addEventListener("submit", (e) => {
@@ -1218,6 +1269,39 @@ $("#heading").addEventListener("change", () => {
   state.edit.heading = $("#heading").value;
   say(`앞쪽을 '${PANEL_NAMES[state.edit.heading]}' 패널 쪽 면으로 정했어요. W를 누르면 이 면이 가는 방향을 봐요.`);
   refreshEdit();
+});
+
+// 대화 상대·API 키 (D-030): 키는 기본 sessionStorage, "기억"을 고르면 localStorage에만
+const KEY_NAME = "d2w.anthropicKey";
+for (const m of MODELS) {
+  const o = document.createElement("option");
+  o.value = m.id;
+  o.textContent = m.label;
+  $("#model").append(o);
+}
+$("#planner").value = localStorage.getItem("d2w.planner") ?? "mock";
+$("#model").value = localStorage.getItem("d2w.model") ?? MODELS[0].id;
+$("#apiKey").value = localStorage.getItem(KEY_NAME) ?? sessionStorage.getItem(KEY_NAME) ?? "";
+$("#rememberKey").checked = localStorage.getItem(KEY_NAME) != null;
+function syncPlannerUI() {
+  const claude = $("#planner").value === "claude";
+  $("#claudeSettings").hidden = !claude;
+  $("#plannerTag").textContent = claude ? "Claude 대화" : "Mock 규칙";
+}
+syncPlannerUI();
+function storeKey() {
+  const key = $("#apiKey").value.trim();
+  localStorage.removeItem(KEY_NAME);
+  sessionStorage.removeItem(KEY_NAME);
+  if (key) ($("#rememberKey").checked ? localStorage : sessionStorage).setItem(KEY_NAME, key);
+}
+$("#apiKey").addEventListener("change", storeKey);
+$("#rememberKey").addEventListener("change", storeKey);
+$("#model").addEventListener("change", () => localStorage.setItem("d2w.model", $("#model").value));
+$("#planner").addEventListener("change", () => {
+  localStorage.setItem("d2w.planner", $("#planner").value);
+  syncPlannerUI();
+  if (state.edit) say($("#planner").value === "claude" ? "이제 Claude와 대화하며 고쳐요. 편하게 말해 주세요." : "이제 Mock 규칙으로 고쳐요(정해진 표현만 알아들어요).");
 });
 for (const p of PANEL_ORDER) {
   const o = document.createElement("option");

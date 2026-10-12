@@ -154,12 +154,27 @@
       </div>
 
       <div class="card" id="editCard" hidden>
-        <h2>5. 6방향 설계도 확인·편집 <span class="tag">Mock 규칙</span></h2>
+        <h2>5. 6방향 설계도 확인·편집 <span class="tag" id="plannerTag">Mock 규칙</span></h2>
         <p class="hint edit-note">입력 그림을 정면으로 두고 뒤·왼쪽·오른쪽·위·아래를 추정해 설계도처럼 펼쳐 보여 줍니다. 처음엔 그림을 고르게 밀어낸 판(지우개 모양)이라, <b>옆 패널</b>을 고르고 "가장자리 둥글게", "볼록하게", "위로 갈수록 얇게"처럼 말하면 두께 모양을 다듬습니다. 방향·크기("세워줘", "더 두껍게")도 고칠 수 있습니다. 점선 상자는 처음(e0) 크기입니다. 다 고쳤으면 <b>앞쪽</b>을 정하고 월드에 배치하세요.</p>
         <label class="field">그림 방향 <small>입력 그림이 물체를 어느 쪽에서 본 모습인가요? 바꾸면 e0부터 다시 시작합니다.</small>
           <select id="viewLabel" aria-label="그림 방향"></select>
         </label>
         <h3>말로 고치기 <small id="editPanelName"></small></h3>
+        <div class="llm">
+          <label class="field">대화 상대
+            <select id="planner" aria-label="대화 상대">
+              <option value="mock">Mock 규칙 (키 없이, 정해진 표현만)</option>
+              <option value="claude">Claude (본인 API 키로 대화)</option>
+            </select>
+          </label>
+          <div class="llm-settings" id="claudeSettings" hidden>
+            <label class="field">Anthropic API 키 <small>이 브라우저에서 Anthropic으로만 보냅니다. 저장소·다른 서버에 저장하지 않고, 그림은 보내지 않습니다(문장·대화·치수만).</small>
+              <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
+            </label>
+            <label class="field">모델 <select id="model" aria-label="모델"></select></label>
+            <label class="check"><input type="checkbox" id="rememberKey"> 이 브라우저에 키 기억 (공용 PC에서는 끄세요)</label>
+          </div>
+        </div>
         <div class="chat" id="editChat" aria-live="polite" data-testid="edit-chat"></div>
         <div class="chips" id="editChips"></div>
         <form class="chatform" id="editForm">
