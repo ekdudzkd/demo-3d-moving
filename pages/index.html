@@ -51,10 +51,11 @@
   <ol class="stepper" id="stepper" aria-label="파이프라인 단계">
     <li data-step="input"><span>1</span>입력</li>
     <li data-step="segment"><span>2</span>객체 분할</li>
-    <li data-step="generate"><span>3</span>3D 생성</li>
-    <li data-step="inspect"><span>4</span>검사·보정</li>
-    <li data-step="blueprint"><span>5</span>6방향 확인</li>
-    <li data-step="world"><span>6</span>월드</li>
+    <li data-step="views"><span>3</span>예상 그림</li>
+    <li data-step="generate"><span>4</span>3D 생성</li>
+    <li data-step="inspect"><span>5</span>검사·보정</li>
+    <li data-step="blueprint"><span>6</span>6방향 확인</li>
+    <li data-step="world"><span>7</span>월드</li>
   </ol>
 
   <main class="layout">
@@ -116,6 +117,23 @@
           </div>
           <button class="ghost wide" id="rerun">옵션 적용해 다시 변환</button>
         </details>
+
+        <div class="llm claude-box">
+          <label class="field">Claude 연결 (선택)
+            <select id="planner" aria-label="대화 상대">
+              <option value="mock">사용 안 함 — Mock 규칙 (키 없이, 정해진 표현만)</option>
+              <option value="claude">Claude 사용 (본인 API 키)</option>
+            </select>
+          </label>
+          <div class="llm-settings" id="claudeSettings" hidden>
+            <label class="field">Anthropic API 키 <small>이 브라우저에서 Anthropic으로만 보냅니다. 저장소·다른 서버에 저장하지 않습니다.</small>
+              <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
+            </label>
+            <label class="field">모델 <select id="model" aria-label="모델"></select></label>
+            <label class="check"><input type="checkbox" id="rememberKey"> 이 브라우저에 키 기억 (공용 PC에서는 끄세요)</label>
+            <label class="check consent"><input type="checkbox" id="viewsConsent"> 변환할 때 <b>분할된 그림</b>을 Claude에 보내 뒤·좌우·위아래 모습을 예상해 그리기 (3D 편집 대화에는 그림을 보내지 않음)</label>
+          </div>
+        </div>
       </div>
 
       <div class="card" id="segCard" hidden>
@@ -126,14 +144,31 @@
         </div>
       </div>
 
+      <div class="card" id="viewsCard" hidden>
+        <h2>3. 6방향 예상 그림 <span class="tag">Claude</span></h2>
+        <p class="hint edit-note">그림을 정면으로 두고 Claude가 뒤·왼쪽·오른쪽·위·아래 모습을 예상해 그렸습니다. 오른쪽 <b>예상 그림</b>에서 확인하고, 다르면 말로 고쳐 달라고 하세요. 3D는 <b>옆모습·위모습 외곽선</b>으로 두께가 정해집니다.</p>
+        <div class="chat" id="viewsChat" aria-live="polite"></div>
+        <div class="chips" id="viewsChips"></div>
+        <form class="chatform" id="viewsForm">
+          <input id="viewsText" aria-label="예상 그림 수정 요청" autocomplete="off" placeholder="예: 옆모습에서 배를 더 볼록하게, 뒷모습에 리본 그려줘">
+          <button class="primary" type="submit">보내기</button>
+        </form>
+        <h3>버전 <small>되돌리기도 새 버전으로 남습니다</small></h3>
+        <ol class="versions" id="viewsVersions"></ol>
+        <div class="row">
+          <button class="ghost" id="viewsUndo">되돌리기</button>
+          <button class="primary" id="viewsBuild">이 그림들로 3D 만들기 →</button>
+        </div>
+      </div>
+
       <div class="card" id="genCard" hidden>
-        <h2>3. 3D 생성 <span class="tag">로컬 기하 대체</span></h2>
+        <h2>4. 3D 생성 <span class="tag">로컬 기하 대체</span></h2>
         <dl class="kv" id="genInfo"></dl>
         <ul class="injected" id="injected"></ul>
       </div>
 
       <div class="card" id="qcCard" hidden>
-        <h2>4. 검사·보정</h2>
+        <h2>5. 검사·보정</h2>
         <div class="outcomes">
           <div class="outcome" id="rawOutcome"></div>
           <div class="arrow" aria-hidden="true">→</div>
@@ -154,27 +189,13 @@
       </div>
 
       <div class="card" id="editCard" hidden>
-        <h2>5. 6방향 설계도 확인·편집 <span class="tag" id="plannerTag">Mock 규칙</span></h2>
+        <h2>6. 6방향 설계도 확인·편집 <span class="tag" id="plannerTag">Mock 규칙</span></h2>
         <p class="hint edit-note">입력 그림을 정면으로 두고 뒤·왼쪽·오른쪽·위·아래를 추정해 설계도처럼 펼쳐 보여 줍니다. 처음엔 그림을 고르게 밀어낸 판(지우개 모양)이라, <b>옆 패널</b>을 고르고 "가장자리 둥글게", "볼록하게", "위로 갈수록 얇게"처럼 말하면 두께 모양을 다듬습니다. 방향·크기("세워줘", "더 두껍게")도 고칠 수 있습니다. 점선 상자는 처음(e0) 크기입니다. 다 고쳤으면 <b>앞쪽</b>을 정하고 월드에 배치하세요.</p>
         <label class="field">그림 방향 <small>입력 그림이 물체를 어느 쪽에서 본 모습인가요? 바꾸면 e0부터 다시 시작합니다.</small>
           <select id="viewLabel" aria-label="그림 방향"></select>
         </label>
         <h3>말로 고치기 <small id="editPanelName"></small></h3>
-        <div class="llm">
-          <label class="field">대화 상대
-            <select id="planner" aria-label="대화 상대">
-              <option value="mock">Mock 규칙 (키 없이, 정해진 표현만)</option>
-              <option value="claude">Claude (본인 API 키로 대화)</option>
-            </select>
-          </label>
-          <div class="llm-settings" id="claudeSettings" hidden>
-            <label class="field">Anthropic API 키 <small>이 브라우저에서 Anthropic으로만 보냅니다. 저장소·다른 서버에 저장하지 않고, 그림은 보내지 않습니다(문장·대화·치수만).</small>
-              <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
-            </label>
-            <label class="field">모델 <select id="model" aria-label="모델"></select></label>
-            <label class="check"><input type="checkbox" id="rememberKey"> 이 브라우저에 키 기억 (공용 PC에서는 끄세요)</label>
-          </div>
-        </div>
+        <p class="hint" id="plannerHint"></p>
         <div class="chat" id="editChat" aria-live="polite" data-testid="edit-chat"></div>
         <div class="chips" id="editChips"></div>
         <form class="chatform" id="editForm">
@@ -196,14 +217,16 @@
     <section class="panel stage" aria-label="3D 뷰">
       <div class="stage-inner">
         <div class="viewtabs" role="tablist">
+          <button class="vt" data-view="views">예상 그림</button>
           <button class="vt" data-view="raw">원본 메시</button>
           <button class="vt" data-view="repaired">보정 메시</button>
           <button class="vt active" data-view="world">월드</button>
-          <button class="vt" data-view="edit">6방향 편집</button>
+          <button class="vt" data-view="edit">6방향 3D</button>
         </div>
         <div class="viewport" id="viewport">
           <div class="busy" id="busy" hidden><div class="spinner"></div><span id="busyText">준비 중…</span></div>
           <div class="editgrid" id="editGrid" role="radiogroup" aria-label="패널 선택" hidden></div>
+          <div class="editgrid viewsgrid" id="viewsGrid" hidden></div>
           <div class="hud" id="hud">
             <div class="score" id="score"></div>
             <div class="help" id="help"></div>

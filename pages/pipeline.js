@@ -15,6 +15,11 @@ export const TARGET_SIZE = 1.0; // repair.py TARGET_SIZE (최대 축 1m)
 export const SMALL_COMPONENT_RATIO = 0.02;
 export const MAX_FACE_LOSS = 0.5;
 
+// 깨끗한 배경 판정: 테두리 ΔE 70백분위가 이보다 작으면 렌더·디지털 그림으로 보고 임계값을 낮춘다
+// (70백분위: 테두리 일부에 걸친 글자·라벨이 판정을 흔들지 않게)
+const CLEAN_BORDER_NOISE = 2;
+const CLEAN_MIN_DELTA = 3.5;
+const CLEAN_EDGE_DELTA = 1.8; // 이웃 픽셀 ΔE가 이보다 크면 경계
 // mesh_ready_check/thresholds.py
 export const DEFAULT_THRESHOLDS = Object.freeze({
   face_budget: 50000,
@@ -290,6 +295,21 @@ function refineMask(mask, w, h) {
   return close(m, w, h, 2);
 }
 
+function refineClean(mask, S) {
+  let m = close(mask, S, S, 2);
+  m = fillHoles(m, S, S);
+  // 라벨·바닥 그림자처럼 가는 다리로 붙은 덩어리를 떼어 낸다: 크게 열어 가장 큰 덩어리만 남기고,
+  // 원래 마스크 안에서 다시 키워 물체 모양은 그대로 되살린다 (형태학적 재구성)
+  const core = keepLargest(open(m, S, S, 4), S, S);
+  let grown = core;
+  for (let k = 0; k < 6; k++) {
+    const d = dilate(grown, S, S, 1);
+    for (let i = 0; i < d.length; i++) d[i] &= m[i];
+    grown = d;
+  }
+  return close(grown, S, S, 2);
+}
+
 /** 그림 → 전경 마스크. 반환 rgba는 SEG_SIZE 정사각형. */
 export function segment(img) {
   const started = now();
@@ -300,6 +320,7 @@ export function segment(img) {
   let source;
   let threshold = null;
   let background = null;
+  let clean = false;
   if (alphaIsMeaningful(rgba)) {
     source = "alpha";
     for (let i = 0; i < N; i++) mask[i] = rgba.data[i * 4 + 3] >= 128 ? 1 : 0;
@@ -321,11 +342,26 @@ export function segment(img) {
       dist[i] = d;
       scaled[i] = Math.min(255, Math.max(0, Math.floor(d * 2)));
     }
-    // 종이 질감·조명 얼룩을 전경으로 잡지 않도록 최소 ΔE 15
-    threshold = Math.max(otsu(scaled) / 2, 15);
+    // 종이 질감·조명 얼룩을 전경으로 잡지 않도록 최소 ΔE 15.
+    // 단, 테두리가 거의 균일한 깨끗한 배경(렌더·디지털 그림)이면 흰 물체도 잡도록 테두리 잡음 기준으로 낮춘다
+    const borderDist = border.map((i) => dist[i]).sort((a, b) => a - b);
+    const noise = borderDist[Math.floor(borderDist.length * 0.7)] ?? 0;
+    clean = noise < CLEAN_BORDER_NOISE;
+    threshold = clean ? Math.max(CLEAN_MIN_DELTA, noise * 3) : Math.max(otsu(scaled) / 2, 15);
     for (let i = 0; i < N; i++) mask[i] = dist[i] > threshold ? 1 : 0;
+    if (clean) {
+      // 흰 물체의 밝은 윗부분처럼 배경과 거의 같은 색도, 경계(색이 갑자기 바뀌는 선)로 둘러싸이면 구멍 채우기로 찬다
+      for (let y = 0; y < S - 1; y++) {
+        for (let x = 0; x < S - 1; x++) {
+          const i = y * S + x;
+          const step = (j) => Math.hypot(lab[i * 3] - lab[j * 3], lab[i * 3 + 1] - lab[j * 3 + 1], lab[i * 3 + 2] - lab[j * 3 + 2]);
+          if (Math.max(step(i + 1), step(i + S)) > CLEAN_EDGE_DELTA) mask[i] = 1;
+        }
+      }
+    }
   }
-  mask = refineMask(cleanMask(mask, S, S), S, S);
+  // 깨끗한 배경은 가는 경계선을 먼저 닫고 채운다(열기를 먼저 하면 경계선이 지워짐)
+  mask = clean ? refineClean(mask, S) : refineMask(cleanMask(mask, S, S), S, S);
   let fg = 0;
   for (let i = 0; i < N; i++) fg += mask[i];
   const coverage = fg / N;
@@ -703,8 +739,10 @@ export function cloneMesh(m) {
 /**
  * 실루엣 → 두께 있는 메시.
  * mode "extrude": mock.py와 같은 평평한 돌출. "inflate": 같은 외곽선에서 가운데를 부풀린 변형.
+ * depthAt(x, y) → [z뒤, z앞]을 주면 정면 점마다 그 두께 구간을 쓴다 (6방향 예상 그림의 실루엣 교차, D-031).
+ * depthAt은 정면 외곽 상자 {xmin, xmax, ymin, ymax}를 받아 만든다: makeDepth(box).
  */
-export function generateMesh(seg, { mode = "extrude", artifacts = true, seed = 0 } = {}) {
+export function generateMesh(seg, { mode = "extrude", artifacts = true, seed = 0, makeDepth = null } = {}) {
   const started = now();
   let m = downsampleMask(seg.mask, seg.size, WORK);
   m = fillHoles(keepLargest(m, WORK, WORK), WORK, WORK);
@@ -733,7 +771,12 @@ export function generateMesh(seg, { mode = "extrude", artifacts = true, seed = 0
 
   const np = points.length;
   const half = new Float64Array(np);
-  if (mode === "inflate") {
+  const back = new Float64Array(np);
+  if (makeDepth) {
+    const box = { xmin: Math.min(...xs), xmax: Math.max(...xs), ymin: Math.min(...ys), ymax: Math.max(...ys) };
+    const depthAt = makeDepth(box);
+    for (let i = 0; i < np; i++) [back[i], half[i]] = depthAt(points[i][0], points[i][1]);
+  } else if (mode === "inflate") {
     const dist = points.map((p, i) => {
       if (i < nb) return 0;
       let d = Infinity;
@@ -746,9 +789,11 @@ export function generateMesh(seg, { mode = "extrude", artifacts = true, seed = 0
     for (let i = 0; i < np; i++) {
       const t = dist[i] / dmax;
       half[i] = rim + bulge * Math.sqrt(Math.max(0, 1 - (1 - t) ** 2));
+      back[i] = -half[i];
     }
   } else {
     half.fill(depth / 2);
+    back.fill(-depth / 2);
   }
 
   const sample = colorSampler(seg);
@@ -761,7 +806,7 @@ export function generateMesh(seg, { mode = "extrude", artifacts = true, seed = 0
     return v.length / 3 - 1;
   };
   for (let i = 0; i < np; i++) pushV(points[i][0], points[i][1], half[i]);
-  for (let i = 0; i < np; i++) pushV(points[i][0], points[i][1], -half[i]);
+  for (let i = 0; i < np; i++) pushV(points[i][0], points[i][1], back[i]);
   const frontFaces = tris.length;
   for (const [a, b, cc] of tris) f.push(a, b, cc);
   for (const [a, b, cc] of tris) f.push(np + cc, np + b, np + a);
@@ -772,7 +817,7 @@ export function generateMesh(seg, { mode = "extrude", artifacts = true, seed = 0
   }
   let mesh = makeMesh(v, f, c);
   const info = {
-    mode,
+    mode: makeDepth ? "views" : mode,
     contour_points: contour.length,
     contour: poly,
     boundary_points: nb,

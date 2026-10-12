@@ -234,8 +234,15 @@ table.diff code { font-size: 10.5px; background: none; padding: 0; color: #8a949
 .llm-settings { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--bg); }
 .llm-settings input[type="password"] { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 13px; font-family: ui-monospace, Consolas, monospace; }
 .msg.thinking { color: var(--ink-2); font-style: italic; }
+.claude-box { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; margin-bottom: 0; }
+.consent { align-items: flex-start; line-height: 1.45; }
+.consent input { margin-top: 2px; flex: none; }
+.viewsgrid { background: #ece6da; }
+.pcell.vcell { background: #fffdf8; cursor: default; }
+.vcell canvas { flex: 1; width: 100%; min-height: 0; display: block; }
 .chat { max-height: 240px; min-height: 64px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; background: var(--bg); border-radius: 10px; padding: 8px; margin-bottom: 8px; }
 .chat:empty::before { content: "옆 패널을 고르고: \"가장자리 둥글게\", \"볼록하게\", \"위로 갈수록 얇게\" · 방향·크기: \"세워줘\", \"더 두껍게\""; font-size: 12px; color: var(--ink-2); }
+#viewsChat:empty::before { content: "예: \"옆모습에서 배를 더 볼록하게\", \"위에서 보면 더 동그랗게\", \"뒷모습에 리본 그려줘\""; }
 .msg { font-size: 13px; padding: 6px 10px; border-radius: 10px; background: var(--paper); align-self: flex-start; max-width: 92%; line-height: 1.45; }
 .msg.user { align-self: flex-end; background: #f3e3cc; }
 .msg.ok { background: var(--ok-bg); color: var(--ok); }

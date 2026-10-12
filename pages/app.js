@@ -7,6 +7,7 @@ import { EditSession, HEADING_PANELS, PANEL_NAMES, PANEL_ORDER, createEditCore, 
 import * as P from "./pipeline.js";
 import { MODELS, chatWithClaude } from "./llm.js";
 import { planEdit } from "./planner.js";
+import { hullDepth, predictViews } from "./views.js";
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -245,11 +246,14 @@ async function run(imageData, label) {
   state.lastLabel = label;
   state.seed++;
   document.body.dataset.status = "running";
-  const mode = $("#mode").value;
-  const budget = Number($("#budget").value);
-  const artifacts = $("#artifacts").checked;
   resetSteps();
   setStep("input", "done");
+  stopViews();
+  stopEditing();
+  disposeGroup(player.tilt);
+  player.ready = false;
+  $("#genCard").hidden = true;
+  $("#qcCard").hidden = true;
   let step = "segment";
   try {
     busy(true, "객체 분할 중… (배경색 기반 전경 추정)");
@@ -259,52 +263,73 @@ async function run(imageData, label) {
     renderSeg(seg, null);
     setStep("segment", "done");
 
-    step = "generate";
-    busy(true, "3D 메시 생성 중… (실루엣 돌출 · 로컬 기하 대체)");
-    setStep("generate", "active");
-    await pause(160);
-    const gen = P.generateMesh(seg, { mode, artifacts, seed: state.seed });
-    renderSeg(seg, gen.info.contour);
-    renderGen(gen, label);
-    setStep("generate", "done");
-
-    step = "inspect";
-    busy(true, "메시 검사·자동 보정 중…");
-    setStep("inspect", "active");
-    await pause(160);
-    const th = { face_budget: budget, target_size: P.TARGET_SIZE };
-    const rawReport = P.inspectMesh(gen.mesh, th);
-    const repair = P.repairMesh(gen.mesh, budget);
-    const repairedReport = P.inspectMesh(repair.mesh, th);
-    const collider = P.buildCollider(repair.mesh);
-    state.result = { seg, gen, rawReport, repair, repairedReport, collider, label };
-    renderQC(state.result);
-    buildInspectObjects(state.result);
-    setStep("inspect", repairedReport.is_usable ? "done" : "failed");
-
-    step = "blueprint";
-    if (!repairedReport.is_usable) {
-      // 생성 성공 ≠ 자산 사용 가능: 사용 불가 판정이면 월드에 넣지 않는다
-      stopEditing();
-      showError("보정 후에도 사용 불가 판정입니다. 월드에 배치하지 않습니다. 다른 그림으로 시도해 주세요.");
-      setView("repaired");
-    } else {
-      // 바로 월드에 넣지 않고 6방향 설계도에서 확인·수정한 뒤 사용자가 배치한다
-      setStep("blueprint", "active");
-      await pause(120);
-      await startEditing(state.result);
-      setView("edit");
+    if (viewsWanted()) {
+      // 3D를 바로 만들지 않고 Claude가 그린 6방향 예상 그림을 먼저 확인·수정한다 (D-031)
+      step = "views";
+      busy(true, "Claude가 뒤·옆·위 모습을 예상해 그리는 중…");
+      setStep("views", "active");
+      await startViews(seg, label);
+      document.body.dataset.status = "views";
+      return;
     }
-    document.body.dataset.status = "ready";
+    await build(seg, label, null, (s) => (step = s));
   } catch (err) {
-    console.error(err);
-    setStep(step, "failed");
-    showError(err.code ? `[${err.code}] ${err.message}` : `처리 중 오류: ${err.message}`);
-    document.body.dataset.status = "error";
+    fail(step, err);
   } finally {
     busy(false);
     state.busy = false;
   }
+}
+
+function fail(step, err) {
+  console.error(err);
+  setStep(step, "failed");
+  showError(err.code ? `[${err.code}] ${err.message}` : `처리 중 오류: ${err.message}`);
+  document.body.dataset.status = "error";
+}
+
+/** 분할 결과 → 3D 생성·검사·보정 → 6방향 설계도. makeDepth가 있으면 예상 그림 외곽선으로 두께를 정한다 */
+async function build(seg, label, makeDepth, onStep) {
+  const mode = $("#mode").value;
+  const budget = Number($("#budget").value);
+  const artifacts = $("#artifacts").checked;
+  onStep("generate");
+  busy(true, makeDepth ? "예상 그림의 옆·위 외곽선으로 3D를 만드는 중…" : "3D 메시 생성 중… (실루엣 돌출 · 로컬 기하 대체)");
+  setStep("generate", "active");
+  await pause(160);
+  const gen = P.generateMesh(seg, { mode, artifacts, seed: state.seed, makeDepth });
+  renderSeg(seg, gen.info.contour);
+  renderGen(gen, label);
+  setStep("generate", "done");
+
+  onStep("inspect");
+  busy(true, "메시 검사·자동 보정 중…");
+  setStep("inspect", "active");
+  await pause(160);
+  const th = { face_budget: budget, target_size: P.TARGET_SIZE };
+  const rawReport = P.inspectMesh(gen.mesh, th);
+  const repair = P.repairMesh(gen.mesh, budget);
+  const repairedReport = P.inspectMesh(repair.mesh, th);
+  const collider = P.buildCollider(repair.mesh);
+  state.result = { seg, gen, rawReport, repair, repairedReport, collider, label };
+  renderQC(state.result);
+  buildInspectObjects(state.result);
+  setStep("inspect", repairedReport.is_usable ? "done" : "failed");
+
+  onStep("blueprint");
+  if (!repairedReport.is_usable) {
+    // 생성 성공 ≠ 자산 사용 가능: 사용 불가 판정이면 월드에 넣지 않는다
+    stopEditing();
+    showError("보정 후에도 사용 불가 판정입니다. 월드에 배치하지 않습니다. 다른 그림으로 시도해 주세요.");
+    setView("repaired");
+  } else {
+    // 바로 월드에 넣지 않고 6방향 설계도에서 확인·수정한 뒤 사용자가 배치한다
+    setStep("blueprint", "active");
+    await pause(120);
+    await startEditing(state.result);
+    setView("edit");
+  }
+  document.body.dataset.status = "ready";
 }
 
 // ---------------------------------------------------------------------------
@@ -357,9 +382,9 @@ function renderGen(gen, label) {
   const i = gen.info;
   kv($("#genInfo"), [
     ["입력", esc(label)],
-    ["생성기", i.mode === "inflate" ? "실루엣 부풀리기 (mock 변형)" : "mock · extrude-1 (실루엣 돌출)"],
+    ["생성기", i.mode === "views" ? "예상 그림 실루엣 교차 (정면 그림 × 옆·위 외곽선)" : i.mode === "inflate" ? "실루엣 부풀리기 (mock 변형)" : "mock · extrude-1 (실루엣 돌출)"],
     ["외곽선", `${i.contour_points}점 (approxPolyDP 0.8px, ${P.WORK}² 작업 해상도)`],
-    ["두께", `폭 × ${P.DEPTH_RATIO} = ${fmt(i.depth, 3)}`],
+    ["두께", i.mode === "views" ? `점마다 옆·위 외곽선이 겹치는 구간 (두께 비율 ${fmt(state.views.versions[state.views.active].cur.depthRatio, 2)})` : `폭 × ${P.DEPTH_RATIO} = ${fmt(i.depth, 3)}`],
     ["원본 메시", `정점 ${fmt(i.vertex_count)} · 면 ${fmt(i.face_count)}`],
     ["시간", `${i.elapsed_ms} ms`],
   ]);
@@ -918,11 +943,13 @@ const HELP = {
 };
 function setView(v) {
   if (v === "edit" && !state.edit) v = "world";
+  if (v === "views" && !state.views) v = "world";
   state.view = v;
   $$(".vt").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
   $("#pad").hidden = v !== "world" || !player.ready;
   $("#editGrid").hidden = v !== "edit";
-  $("#hud").hidden = v === "edit"; // 패널 머리글과 겹치므로 설계도에서는 숨긴다 (안내는 왼쪽 카드)
+  $("#viewsGrid").hidden = v !== "views";
+  $("#hud").hidden = v === "edit" || v === "views"; // 패널 머리글과 겹치므로 설계도에서는 숨긴다 (안내는 왼쪽 카드)
   const waiting = state.edit && !state.edit.placed ? "6방향 설계도를 확인하고 '이 모양으로 월드에 배치'를 누르면 여기에 등장합니다" : "그림을 변환하면 여기에 등장합니다";
   $("#help").textContent = v === "world" && !player.ready ? waiting : (HELP[v] ?? "");
   inspectObjects.raw.visible = v === "raw";
@@ -932,12 +959,16 @@ function setView(v) {
   $("#legend").textContent = rep ? `${v === "raw" ? "원본" : "보정본"} · 정점 ${fmt(rep.vertex_count)} · 면 ${fmt(rep.face_count)}` : "";
   if (v === "world" && r && player.ready) $("#legend").textContent = `월드 배율 ×${WORLD_SCALE} · 충돌체: 상자 · 편집 e${state.edit.session.active} · 앞쪽 ${PANEL_NAMES[state.edit.heading]}`;
   if (v === "edit") $("#legend").textContent = `설계도(정사영, 패널마다 고정 범위 ${state.edit.span.toFixed(2)} m) · 현재 e${state.edit.session.active}`;
+  if (v === "views") {
+    $("#legend").textContent = `Claude 예상 그림 v${state.views.active} · 크기는 최대 변 1 m 기준`;
+    renderViews();
+  }
   if (!controls) return;
-  controls.enabled = v !== "edit";
+  controls.enabled = v !== "edit" && v !== "views";
   if (v === "world") {
     controls.autoRotate = false;
     frameWorldCamera(true);
-  } else if (v !== "edit") {
+  } else if (v !== "edit" && v !== "views") {
     controls.autoRotate = true;
     controls.autoRotateSpeed = 1.6;
     frameInspect(inspectObjects[v]);
@@ -1072,6 +1103,7 @@ function stopEditing() {
   state.edit = null;
   $("#editCard").hidden = true;
   clearEditObjects();
+  if (state.view === "edit") setView("world");
 }
 
 function clearEditObjects() {
@@ -1287,6 +1319,9 @@ function syncPlannerUI() {
   const claude = $("#planner").value === "claude";
   $("#claudeSettings").hidden = !claude;
   $("#plannerTag").textContent = claude ? "Claude 대화" : "Mock 규칙";
+  $("#plannerHint").textContent = claude
+    ? "Claude와 대화하며 고쳐요. 이 대화에는 그림을 보내지 않아요(문장·치수만)."
+    : "Mock 규칙: 아래 버튼 같은 표현만 알아들어요. 1번 카드에서 Claude를 켜면 자유롭게 대화할 수 있어요.";
 }
 syncPlannerUI();
 function storeKey() {
@@ -1349,6 +1384,257 @@ function renderEditPanels() {
 }
 
 // ---------------------------------------------------------------------------
+// 6방향 예상 그림 (views.js, D-031): Claude가 그린 2D 그림 → 대화로 수정 → 그 외곽선으로 3D
+// ---------------------------------------------------------------------------
+const VIEW_PROMPTS = ["옆모습을 더 둥글게", "더 두껍게", "더 얇게", "위에서 보면 더 동그랗게", "뒷모습을 다시 그려줘"];
+const viewCells = {};
+for (const panel of PANEL_ORDER) {
+  const cell = document.createElement("div");
+  cell.className = "pcell vcell";
+  cell.dataset.panel = panel;
+  cell.innerHTML = `<div class="ph"><b>${PANEL_NAMES[panel]}</b>${panel === "front" ? "<em>입력 그림</em>" : "<em>예상</em>"}<small></small></div><canvas></canvas>`;
+  $("#viewsGrid").append(cell);
+  viewCells[panel] = cell;
+}
+for (const q of VIEW_PROMPTS) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = q;
+  b.addEventListener("click", () => sendViews(q));
+  $("#viewsChips").append(b);
+}
+
+const viewsWanted = () => $("#planner").value === "claude" && $("#apiKey").value.trim() !== "" && $("#viewsConsent").checked;
+const activeViews = () => state.views.versions[state.views.active].cur;
+
+function sayViews(text, tone = "") {
+  state.views.history.push({ role: tone === "user" ? "user" : "assistant", text });
+  const m = document.createElement("div");
+  m.className = `msg ${tone}`;
+  m.textContent = text;
+  $("#viewsChat").append(m);
+  $("#viewsChat").scrollTop = $("#viewsChat").scrollHeight;
+}
+
+function stopViews() {
+  state.views = null;
+  $("#viewsCard").hidden = true;
+  if (state.view === "views") setView("world");
+}
+
+/** 분할 마스크로 정면 그림(배경 흰색)·외곽 상자를 만들고 Claude에 첫 예상을 부탁한다 */
+async function startViews(seg, label) {
+  const S = seg.size;
+  let x0 = S, y0 = S, x1 = -1, y1 = -1;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) if (seg.mask[y * S + x]) [x0, y0, x1, y1] = [Math.min(x0, x), Math.min(y0, y), Math.max(x1, x), Math.max(y1, y)];
+  const full = document.createElement("canvas");
+  full.width = full.height = S;
+  const img = new ImageData(new Uint8ClampedArray(seg.rgba.data), S, S);
+  for (let i = 0; i < S * S; i++) {
+    if (seg.mask[i]) img.data[i * 4 + 3] = 255;
+    else img.data.set([255, 255, 255, 0], i * 4);
+  }
+  full.getContext("2d").putImageData(img, 0, 0);
+  const crop = document.createElement("canvas");
+  crop.width = x1 - x0 + 1;
+  crop.height = y1 - y0 + 1;
+  crop.getContext("2d").drawImage(full, x0, y0, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  const send = document.createElement("canvas");
+  send.width = send.height = S;
+  const sctx = send.getContext("2d");
+  sctx.fillStyle = "#fff";
+  sctx.fillRect(0, 0, S, S);
+  sctx.drawImage(full, 0, 0);
+  const png = send.toDataURL("image/png").split(",")[1];
+  state.views = { seg, label, png, crop, front: { width: crop.width / S, height: crop.height / S }, versions: [], active: -1, history: [], thinking: false };
+  $("#viewsChat").replaceChildren();
+  $("#viewsCard").hidden = false;
+  const r = await predictViews({ apiKey: $("#apiKey").value.trim(), model: $("#model").value, pngBase64: png, front: state.views.front });
+  addViewsVersion(r, "예상", "처음 예상", null);
+  sayViews(r.reply || "뒤·옆·위 모습을 예상해 그렸어요.");
+  setView("views");
+}
+
+function addViewsVersion(cur, kind, text, prev) {
+  const v = state.views;
+  v.versions.push({ cur: { depthRatio: cur.depthRatio, views: cur.views }, kind, text, prev });
+  v.active = v.versions.length - 1;
+  renderViewsList();
+  if (state.view === "views") setView("views");
+}
+
+function renderViewsList() {
+  const v = state.views;
+  $("#viewsCard").dataset.active = `v${v.active}`;
+  $("#viewsUndo").disabled = v.versions[v.active].prev == null;
+  $("#viewsVersions").replaceChildren(
+    ...[...v.versions.keys()].reverse().map((i) => {
+      const li = document.createElement("li");
+      li.className = i === v.active ? "active" : "";
+      li.innerHTML = `<b>v${i}</b><em>${v.versions[i].kind}</em><span class="vtext"></span>`;
+      li.querySelector(".vtext").textContent = `${v.versions[i].text} · 두께 비율 ${v.versions[i].cur.depthRatio.toFixed(2)}`;
+      return li;
+    }),
+  );
+}
+
+async function sendViews(text) {
+  const v = state.views;
+  if (!v || !text.trim() || v.thinking || state.busy) return;
+  if (!viewsWanted()) {
+    sayViews("예상 그림을 고치려면 1번 카드에서 Claude 사용·API 키·그림 전송 동의가 필요해요.", "warn");
+    return;
+  }
+  const history = v.history.slice();
+  sayViews(text, "user");
+  $("#viewsText").value = "";
+  const thinking = document.createElement("div");
+  thinking.className = "msg thinking";
+  thinking.textContent = "Claude가 그림을 고치는 중…";
+  $("#viewsChat").append(thinking);
+  v.thinking = true;
+  $("#viewsCard").dataset.thinking = "true";
+  try {
+    const r = await predictViews({ apiKey: $("#apiKey").value.trim(), model: $("#model").value, pngBase64: v.png, front: v.front, current: activeViews(), history, text });
+    thinking.remove();
+    if (state.views !== v) return;
+    sayViews(r.reply || (r.changed ? "고쳤어요." : "그대로 두었어요."));
+    if (r.changed) addViewsVersion(r, "수정", text, v.active);
+  } catch (e) {
+    thinking.remove();
+    sayViews(e.message, "error");
+  } finally {
+    v.thinking = false;
+    delete $("#viewsCard").dataset.thinking;
+  }
+}
+
+/** 예상 그림 6장을 같은 축척으로 그린다 (최대 변 = 1 m) */
+function renderViews() {
+  const v = state.views;
+  if (!v || v.active < 0) return;
+  const cur = activeViews();
+  const W = v.front.width;
+  const H = v.front.height;
+  const D = cur.depthRatio * W;
+  const unit = Math.max(W, H, D);
+  const box = { front: [W, H], back: [W, H], left: [D, H], right: [D, H], top: [W, D], bottom: [W, D] };
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const sizes = PANEL_ORDER.map((p) => viewCells[p].querySelector("canvas").getBoundingClientRect());
+  const k = Math.min(...PANEL_ORDER.map((p, i) => Math.min((sizes[i].width - 36) / box[p][0], (sizes[i].height - 30) / box[p][1])));
+  for (const [i, p] of PANEL_ORDER.entries()) {
+    const canvas = viewCells[p].querySelector("canvas");
+    canvas.width = Math.max(1, Math.round(sizes[i].width * dpr));
+    canvas.height = Math.max(1, Math.round(sizes[i].height * dpr));
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const [bw, bh] = [box[p][0] * k, box[p][1] * k];
+    const ox = (sizes[i].width - bw) / 2;
+    const oy = (sizes[i].height - bh) / 2;
+    viewCells[p].querySelector("small").textContent = `${(box[p][0] / unit).toFixed(2)} × ${(box[p][1] / unit).toFixed(2)} m`;
+    drawView(ctx, p, cur, v, ox, oy, bw, bh);
+  }
+}
+
+function drawView(ctx, panel, cur, v, ox, oy, bw, bh) {
+  const at = ([u, vv], flipU = false, flipV = false) => [ox + (flipU ? 1 - u : u) * bw, oy + (flipV ? 1 - vv : vv) * bh];
+  const path = (pts, flipU, flipV) => {
+    ctx.beginPath();
+    pts.forEach((p, i) => ctx[i ? "lineTo" : "moveTo"](...at(p, flipU, flipV)));
+    ctx.closePath();
+  };
+  ctx.save();
+  ctx.setLineDash([5, 4]);
+  ctx.strokeStyle = "#a36b25";
+  ctx.strokeRect(ox, oy, bw, bh);
+  ctx.restore();
+  if (panel === "front") {
+    ctx.drawImage(v.crop, ox, oy, bw, bh);
+    return;
+  }
+  const look = cur.views[panel];
+  // 외곽선: left·top은 그대로, right·bottom은 거울, back은 정면 그림 실루엣의 좌우 거울
+  const outline = { left: [cur.views.left.outline, false, false], right: [cur.views.left.outline, true, false], top: [cur.views.top.outline, false, false], bottom: [cur.views.top.outline, false, true] }[panel];
+  ctx.save();
+  if (panel === "back") {
+    const sil = document.createElement("canvas");
+    sil.width = v.crop.width;
+    sil.height = v.crop.height;
+    const s = sil.getContext("2d");
+    s.translate(sil.width, 0);
+    s.scale(-1, 1);
+    s.drawImage(v.crop, 0, 0);
+    s.setTransform(1, 0, 0, 1, 0, 0);
+    s.globalCompositeOperation = "source-in";
+    s.fillStyle = look.base_color;
+    s.fillRect(0, 0, sil.width, sil.height);
+    s.globalCompositeOperation = "source-atop";
+    for (const part of look.parts) {
+      s.fillStyle = part.color;
+      s.beginPath();
+      part.points.forEach(([u, vv], i) => s[i ? "lineTo" : "moveTo"](u * sil.width, vv * sil.height));
+      s.closePath();
+      s.fill();
+    }
+    ctx.drawImage(sil, ox, oy, bw, bh);
+  } else {
+    path(outline[0], outline[1], outline[2]);
+    ctx.fillStyle = look.base_color;
+    ctx.fill();
+    ctx.clip();
+    for (const part of look.parts) {
+      path(part.points);
+      ctx.fillStyle = part.color;
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.save();
+    path(outline[0], outline[1], outline[2]);
+    ctx.strokeStyle = "#25323b";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+  ctx.restore();
+  // 물체 앞(입력 그림 쪽)이 어느 쪽인지 표시
+  const front = { left: "앞 →", right: "← 앞", top: "앞 ↓", bottom: "앞 ↑", back: "" }[panel];
+  if (front) {
+    ctx.fillStyle = "#6b7378";
+    ctx.font = "11px Pretendard Variable, sans-serif";
+    ctx.fillText(front, ox + 4, oy + bh + 14 > ctx.canvas.height ? oy - 4 : oy + bh + 14);
+  }
+}
+
+$("#viewsForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  sendViews($("#viewsText").value);
+});
+$("#viewsUndo").addEventListener("click", () => {
+  const v = state.views;
+  const target = v && v.versions[v.versions[v.active].prev];
+  if (!target) return;
+  addViewsVersion(target.cur, "되돌리기", `v${v.active} 되돌림 → v${v.versions[v.active].prev}`, target.prev);
+  sayViews(`v${v.active}: 이전 그림으로 되돌렸어요.`);
+});
+$("#viewsBuild").addEventListener("click", async () => {
+  const v = state.views;
+  if (!v || state.busy || v.thinking) return;
+  state.busy = true;
+  let step = "generate";
+  const cur = activeViews();
+  try {
+    setStep("views", "done");
+    await build(v.seg, v.label, (box) => hullDepth(cur, box), (s) => (step = s));
+    sayViews(`v${v.active} 그림으로 3D를 만들었어요. 오른쪽 '6방향 3D'에서 확인하세요.`, "ok");
+  } catch (err) {
+    fail(step, err);
+  } finally {
+    busy(false);
+    state.busy = false;
+  }
+});
+if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => state.view === "views" && renderViews()).observe(viewport);
+
+// ---------------------------------------------------------------------------
 // 렌더 루프
 // ---------------------------------------------------------------------------
 const clock = new THREE.Clock();
@@ -1375,6 +1661,7 @@ function loop() {
     marker.material.opacity = 0.55 + Math.sin(t * 6) * 0.3;
   }
   controls.update();
+  if (state.view === "views") return; // 예상 그림은 2D 캔버스만 보인다
   if (state.view === "edit") renderEditPanels();
   else renderer.render(state.view === "world" ? worldScene : inspectScene, camera);
 }

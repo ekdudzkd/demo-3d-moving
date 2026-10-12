@@ -115,9 +115,8 @@ export function parseReply(raw) {
   return { reply: String(data.reply ?? ""), kind: data.kind, ops: data.kind === "ops" ? ops.slice(0, 4) : [], reason_code: data.reason_code ?? null };
 }
 
-/** Claude 호출. fetchImpl은 테스트에서 바꿔 끼운다. 실패는 사용자에게 보여 줄 한국어 Error */
-export async function chatWithClaude({ apiKey, model, history, text, state, fetchImpl = fetch }) {
-  const body = buildRequest({ model, history, text, state });
+/** Messages API 호출 → 응답 text 블록. fetchImpl은 테스트에서 바꿔 끼운다. 실패는 사용자에게 보여 줄 한국어 Error */
+export async function callClaude({ apiKey, body, fetchImpl = fetch }) {
   let res;
   try {
     res = await fetchImpl(API_URL, {
@@ -144,5 +143,10 @@ export async function chatWithClaude({ apiKey, model, history, text, state, fetc
   if (data.stop_reason === "max_tokens") throw new Error("Claude 답이 너무 길어 잘렸어요. 짧게 다시 말해 주세요.");
   const raw = (data.content ?? []).find((b) => b.type === "text")?.text;
   if (!raw) throw new Error("Claude 답에 내용이 없어요.");
-  return parseReply(raw);
+  return raw;
+}
+
+/** 3D 편집 대화 한 턴 */
+export async function chatWithClaude({ apiKey, model, history, text, state, fetchImpl = fetch }) {
+  return parseReply(await callClaude({ apiKey, body: buildRequest({ model, history, text, state }), fetchImpl }));
 }
