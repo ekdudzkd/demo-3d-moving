@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { api, type ModelEntry } from "../../services/api";
 import type { MaskOut, ProjectOut } from "../../types/domain";
+import { EXPERIMENTAL_LABELS, LABEL_HINTS, PANEL_NAMES, type Panel, STABLE_LABELS } from "../edit/basis";
 import { loadImage, renderPreviews, type Previews } from "./maskRender";
 import styles from "./MaskPage.module.css";
 import { EMPTY, isUsableBox, normalizeBox, toImageCoords, type Mode, type Prompts } from "./prompts";
@@ -32,6 +33,7 @@ export function MaskPage() {
   const [generator, setGenerator] = useState("");
   const [seed, setSeed] = useState(0);
   const [ratio, setRatio] = useState(0.85);
+  const [viewLabel, setViewLabel] = useState<Panel>("front");
 
   const refresh = useCallback(async (p: ProjectOut, m: MaskOut) => {
     const [orig, maskImg] = await Promise.all([loadImage(p.original_url), loadImage(m.url)]);
@@ -116,7 +118,7 @@ export function MaskPage() {
       await api.confirmMask(project.id, mask.version);
       const job = await api.createJob(project.id, {
         generator: generator || undefined,
-        options: { seed },
+        options: { seed, view_label: viewLabel },
         preprocess: { foreground_ratio: ratio },
       });
       navigate(`/jobs/${job.id}`);
@@ -224,6 +226,16 @@ export function MaskPage() {
                 <option key={m.name} value={m.name} disabled={!m.environment?.ok}>
                   {m.name}
                   {m.environment?.ok ? "" : " (사용 불가)"}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.field}>
+            <span>이 그림은 물체를 어느 쪽에서 본 모습인가요?</span>
+            <select aria-label="그림 방향" value={viewLabel} onChange={(e) => setViewLabel(e.target.value as Panel)}>
+              {[...STABLE_LABELS, ...EXPERIMENTAL_LABELS].map((p) => (
+                <option key={p} value={p}>
+                  {PANEL_NAMES[p]} — {LABEL_HINTS[p]}
                 </option>
               ))}
             </select>

@@ -9,6 +9,10 @@ export type JobError = components["schemas"]["JobError"];
 export type JobEventOut = components["schemas"]["JobEventOut"];
 export type SegmentIn = components["schemas"]["SegmentIn"];
 export type JobCreateIn = components["schemas"]["JobCreateIn"];
+export type EditsOut = components["schemas"]["EditsOut"];
+export type VersionOut = components["schemas"]["VersionOut"];
+export type EditQueuedOut = components["schemas"]["EditQueuedOut"];
+export type EditPlanOut = components["schemas"]["EditPlanOut"];
 
 export type JobStatus =
   | "QUEUED"

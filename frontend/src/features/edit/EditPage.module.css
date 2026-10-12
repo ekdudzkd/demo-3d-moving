@@ -1,0 +1,151 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 230px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.panel:focus-visible {
+  outline: 3px solid var(--accent-soft);
+}
+
+.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.canvas {
+  flex: 1;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 4px 2px;
+}
+
+.msg {
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  align-self: flex-start;
+  max-width: 92%;
+}
+
+.user {
+  align-self: flex-end;
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+.ok {
+  border-color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.warn {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.error {
+  border-color: var(--error);
+  background: var(--error-soft);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips button {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.input {
+  display: flex;
+  gap: 8px;
+}
+
+.input input {
+  flex: 1;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.timeline li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 13px;
+  background: var(--surface);
+}
+
+.timeline li.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.timeline .text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

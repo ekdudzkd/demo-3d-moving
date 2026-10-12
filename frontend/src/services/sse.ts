@@ -14,3 +14,10 @@ export function subscribeJobEvents(
   });
   return () => source.close();
 }
+
+/** 편집 버전 상태 구독. 버전이 끝나거나 활성 버전이 바뀌면 onChange를 부른다. */
+export function subscribeAssetEvents(assetId: string, onChange: () => void): () => void {
+  const source = new EventSource(`/api/assets/${assetId}/events`);
+  for (const name of ["edit_ready", "edit_failed", "active_version_changed"]) source.addEventListener(name, onChange);
+  return () => source.close();
+}

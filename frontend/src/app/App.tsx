@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 
+import { EditPage } from "../features/edit/EditPage";
 import { ProgressPage } from "../features/generation/ProgressPage";
 import { ResultPage } from "../features/model-viewer/ResultPage";
 import { ReportPage } from "../features/quality-report/ReportPage";
@@ -16,6 +17,7 @@ export function App() {
         <Route path="projects/:projectId/mask" element={<MaskPage />} />
         <Route path="jobs/:jobId" element={<ProgressPage />} />
         <Route path="jobs/:jobId/result" element={<ResultPage />} />
+        <Route path="jobs/:jobId/edit" element={<EditPage />} />
         <Route path="jobs/:jobId/world" element={<WorldPage />} />
         <Route path="jobs/:jobId/report" element={<ReportPage />} />
         <Route path="*" element={<p>페이지가 없습니다.</p>} />

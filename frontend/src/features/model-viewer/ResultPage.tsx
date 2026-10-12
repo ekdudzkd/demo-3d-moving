@@ -30,6 +30,9 @@ export function ResultPage() {
         <span className={`badge ${tone}`}>{label}</span>
         <span className="badge">모델 {report.model.name}</span>
         <span className="spacer" />
+        <Link className="button" to={`/jobs/${job.id}/edit`}>
+          6방향 보기·편집
+        </Link>
         <Link className="button primary" to={`/jobs/${job.id}/world`}>
           월드에 배치 →
         </Link>

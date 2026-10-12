@@ -1,4 +1,16 @@
-import type { Asset, JobCreateIn, JobOut, MaskOut, ProjectOut, SegmentIn, ValidationResult } from "../types/domain";
+import type {
+  Asset,
+  EditPlanOut,
+  EditQueuedOut,
+  EditsOut,
+  JobCreateIn,
+  JobOut,
+  MaskOut,
+  ProjectOut,
+  SegmentIn,
+  ValidationResult,
+  VersionOut,
+} from "../types/domain";
 
 export class ApiError extends Error {
   constructor(
@@ -42,6 +54,9 @@ const post = (body?: unknown): RequestInit => ({
   headers: { "content-type": "application/json" },
   body: JSON.stringify(body ?? {}),
 });
+
+/** 편집 요청 결과: 202면 적용 대기열, 200이면 거절·되묻기·변화 없음 */
+export type EditResult = ({ queued: true } & EditQueuedOut) | ({ queued: false } & EditPlanOut);
 
 export type UploadResult = { ok: true; project: ProjectOut } | { ok: false; validation: ValidationResult };
 
@@ -90,4 +105,13 @@ export const api = {
   retryJob: (id: string, body: JobCreateIn = {}) => request<JobOut>(`/api/jobs/${id}/retry`, post(body)),
   getAsset: (id: string) => request<Asset>(`/api/assets/${id}`),
   getJson: <T>(url: string) => request<T>(url),
+
+  getEdits: (assetId: string) => request<EditsOut>(`/api/assets/${assetId}/edits`),
+  async edit(assetId: string, panel: string, text: string): Promise<EditResult> {
+    const body = await request<EditQueuedOut | EditPlanOut>(`/api/assets/${assetId}/edits`, post({ panel, text }));
+    return body.kind === "ops" ? { queued: true, ...(body as EditQueuedOut) } : { queued: false, ...(body as EditPlanOut) };
+  },
+  undo: (assetId: string) => request<VersionOut>(`/api/assets/${assetId}/edits/undo`, post()),
+  revert: (assetId: string, toVersion: number) =>
+    request<VersionOut>(`/api/assets/${assetId}/edits/revert`, post({ to_version: toVersion })),
 };
