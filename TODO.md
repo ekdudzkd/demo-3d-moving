@@ -9,16 +9,8 @@
 | 5-1 | 편집 코어 (패널 기준표·라벨 회전·합성·stand_up·범위 검사) | ✅ 완료 |
 | 5-2 | 버전 모델 + API (append-only 이력·undo 체인·실패 버전·asset SSE) | ✅ 완료 |
 | 5-3 | EditPlanner (Mock 한국어 규칙 + Claude 구조화 출력 adapter) | ✅ 완료 |
-| 5-4 | 프론트 6패널 편집 화면 | 🟡 진행중 (코드·단위 테스트 완료, E2E·화면 확인 남음) |
+| 5-4 | 프론트 6패널 편집 화면 | ✅ 완료 |
 | 5-5 | pages 데모 적용 | ⬜ 대기 |
-
-## 5-4 남은 일 (완료 조건)
-
-- [ ] `npm run build` 통과 확인 (Windows에서 esbuild postinstall이 allow-scripts로 막혀 있음 → `npm approve-scripts esbuild` 또는 WSL에서 빌드)
-- [ ] E2E `e2e/edit.spec.ts` 작성·실행: 완료 job → `/jobs/:id/edit` → 캔버스 6개 → "세워줘"(응답 표시) → "더 두껍게" → e1 활성 → 되돌리기 → 활성 버전의 op가 e0과 같음, 페이지 오류 없음
-- [ ] 실제 서버(백엔드+워커+프론트)로 화면 확인·스크린샷: 패널 선택 테두리, 점선 e0 상자, 두께 편집 시 패널에서 실제로 커져 보이는지(E2), left 라벨 업로드 시 e0 회전
-- [ ] 마스크 화면의 "그림 방향" 선택이 job `options.view_label`로 들어가는지 확인
-- [ ] IMPLEMENTATION_PLAN 5-4 ✅ 처리 + 작업 로그
 
 ## 5-5 pages 데모
 

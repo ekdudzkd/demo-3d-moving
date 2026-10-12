@@ -70,7 +70,10 @@ export function EditPage() {
     return () => clearInterval(t);
   }, [state?.in_progress, reload]);
 
-  useEffect(() => chatEnd.current?.scrollIntoView?.({ block: "nearest" }), [chat]);
+  useEffect(() => {
+    // 최신 브라우저의 scrollIntoView는 Promise를 돌려주므로 effect의 반환값(cleanup)으로 넘기지 않는다
+    chatEnd.current?.scrollIntoView?.({ block: "nearest" });
+  }, [chat]);
 
   async function send(message: string) {
     if (!assetId || !message.trim() || busy) return;
