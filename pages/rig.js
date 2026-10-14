@@ -158,6 +158,25 @@ function humanJoints(mask, S, b) {
   const med = sorted[sorted.length >> 1] || 1;
   let neckRow = sm.reduce((m, q) => (q.s < m.s ? q : m), sm[0]);
   if (!neckRow || neckRow.s > med * 0.88) neckRow = sm.find((q) => q.y >= y0 + 0.28 * H) || { y: y0 + 0.28 * H, c: cx };
+  // 둥근 머리 아래 가장 잘록한 줄이 목: 머리 폭이 가장 넓은 줄부터 내려가며, 다시 머리보다 넓어지기(어깨·팔) 전까지의 최소 폭.
+  // 막대 인형은 몸통도 가는 선이라 '전체에서 가장 좁은 줄'이 몸통 중간에 잡히므로 이쪽을 우선한다
+  {
+    let headW = 0;
+    let headI = -1;
+    widths.forEach((q, i) => {
+      if (q.y <= y0 + 0.35 * H && q.w > headW) {
+        headW = q.w;
+        headI = i;
+      }
+    });
+    let best = null;
+    for (let i = headI + 1; headI >= 0 && i < widths.length; i++) {
+      const q = widths[i];
+      if (q.w > headW) break;
+      if (q.w > 0 && (!best || q.w < best.w)) best = q;
+    }
+    if (best && headW >= 0.12 * W && best.w < 0.7 * headW && best.y < neckRow.y) neckRow = best;
+  }
   const neckY = neckRow.y;
   const headMid = runAt(mask, S, (y0 + neckY) / 2, cx);
   const head = [headMid ? (headMid[0] + headMid[1]) / 2 : cx, (y0 + neckY) / 2];
@@ -191,15 +210,32 @@ function humanJoints(mask, S, b) {
   let crotchY = y0 + 0.62 * H;
   let y = Math.round(y1 - 0.06 * H);
   if (fRx - fLx > 2 && gapBetween(y)) {
-    while (y > y0 && gapBetween(y)) y--;
-    crotchY = y;
+    // 두 다리를 각각 따라 올라가다 한 구간으로 만나는 줄 (벌린 다리는 비스듬해서, 발 사이 전체를 보면 팔 높이까지 올라가 버린다)
+    let lx = fLx;
+    let rx = fRx;
+    let met = null;
+    for (; y > y0; y--) {
+      const rl = runAt(mask, S, y, lx);
+      const rr = runAt(mask, S, y, rx);
+      if (!rl || !rr) break;
+      if (rl[0] === rr[0]) {
+        met = y;
+        break;
+      }
+      lx = (rl[0] + rl[1]) / 2;
+      rx = (rr[0] + rr[1]) / 2;
+    }
+    crotchY = met ?? y;
   }
   crotchY = Math.min(y1 - 0.12 * H, Math.max(neckY + 0.3 * (y1 - neckY), crotchY));
   const hipY = crotchY - 0.03 * H;
   const hipRun = runAt(mask, S, hipY, cx);
   const hipX = hipRun ? (hipRun[0] + hipRun[1]) / 2 : cx;
-  const hipL = [hipX + (fLx - hipX) * 0.55, hipY];
-  const hipR = [hipX + (fRx - hipX) * 0.55, hipY];
+  // 엉덩이는 골반 줄의 몸 안쪽에 둔다 (다리를 크게 벌린 막대 인형에서 몸 밖 허공에 찍히지 않게)
+  const hl = hipRun ? hipRun[0] : -Infinity;
+  const hr = hipRun ? hipRun[1] : Infinity;
+  const hipL = [Math.min(hipX, Math.max(hl, hipX + (fLx - hipX) * 0.55)), hipY];
+  const hipR = [Math.max(hipX, Math.min(hr, hipX + (fRx - hipX) * 0.55)), hipY];
   const kneeY = (hipY + footY) / 2;
   const legX = (hx, fx) => {
     const r = runAt(mask, S, kneeY, (hx + fx) / 2);
@@ -220,7 +256,8 @@ function humanJoints(mask, S, b) {
   let maxX = -1;
   let minYs = [];
   let maxYs = [];
-  for (let y = Math.round(shY); y <= Math.round(Math.min(y1 - 0.05 * H, crotchY + 0.15 * H)); y++) {
+  // 손은 골반보다 조금 아래까지만 찾는다: 더 내려가면 옆으로 벌린 다리 끝을 손으로 잡는다
+  for (let y = Math.round(shY); y <= Math.round(Math.min(y1 - 0.05 * H, hipY + 0.05 * H)); y++) {
     for (let x = x0; x <= x1; x++) {
       if (!mask[y * S + x]) continue;
       if (x < minX) {
@@ -243,7 +280,23 @@ function humanJoints(mask, S, b) {
   let hR = maxYs.length ? [maxX - 0.02 * W, avg(maxYs)] : [sR[0] + 0.05 * W, hipY];
   if (hL[0] > sL[0] - 0.03 * W) hL = [sL[0] - 0.04 * W, hipY];
   if (hR[0] < sR[0] + 0.03 * W) hR = [sR[0] + 0.04 * W, hipY];
-  const elbow = (s, h, side) => [(s[0] + h[0]) / 2 + side * 0.02 * W, (s[1] + h[1]) / 2];
+  // 팔꿈치: 어깨~손 가운데. 팔이 굽어 그 점이 몸 밖이면 가장 가까운 그림 위 점으로 옮긴다
+  const snap = (p) => {
+    if (at(p[0], p[1])) return p;
+    const R = Math.round(0.08 * W);
+    let best = p;
+    let bd = Infinity;
+    for (let dy = -R; dy <= R; dy++)
+      for (let dx = -R; dx <= R; dx++) {
+        const d = dx * dx + dy * dy;
+        if (d < bd && at(p[0] + dx, p[1] + dy)) {
+          bd = d;
+          best = [p[0] + dx, p[1] + dy];
+        }
+      }
+    return best;
+  };
+  const elbow = (s, h, side) => snap([(s[0] + h[0]) / 2 + side * 0.02 * W, (s[1] + h[1]) / 2]);
   const neck = [neckRow.c ?? cx, neckY];
   return {
     head,

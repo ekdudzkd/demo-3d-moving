@@ -303,7 +303,7 @@ drawCanvas.addEventListener("pointermove", (e) => {
     pen.last = null;
   }),
 );
-// 그린 그림이 바뀌면 '관절 만들기'를 다시 누르라고 표시만 한다 (관절은 버튼을 눌러야 갱신)
+// 획을 다 그을 때마다 오른쪽 관절을 바로 다시 찍는다
 function drawingChanged() {
   sourceChanged();
 }
@@ -1668,9 +1668,16 @@ function currentSource() {
   return null;
 }
 let sourceRev = 0;
-/** 왼쪽 그림이 바뀜: 이미 만든 관절과 달라졌으면 버튼에 표시 */
+/** 왼쪽 그림이 바뀜(획을 다 그음·사진·샘플·탭 전환): 바로 오른쪽 관절을 다시 찍는다 (실시간) */
 function sourceChanged() {
   sourceRev++;
+  if (state.busy) return syncMakeRig();
+  const tab = $(".tab.active")?.dataset.tab;
+  if (currentSource()) makeRigFromSource();
+  else if (tab === "draw" && state.input?.drawing) {
+    state.madeRev = sourceRev;
+    setInput(null); // 그림을 다 지움
+  }
   syncMakeRig();
 }
 function syncMakeRig() {
@@ -1685,15 +1692,11 @@ function syncMakeRig() {
   hint.classList.toggle("stale", !!stale);
   hint.textContent = !ready
     ? tab === "upload"
-      ? "사진을 올린 뒤 눌러요. 오른쪽에 관절이 찍혀요."
+      ? "사진을 올리면 오른쪽에 바로 관절이 찍혀요."
       : tab === "samples"
-        ? "샘플을 고른 뒤 눌러요. 오른쪽에 관절이 찍혀요."
-        : "그림을 그린 뒤 눌러요. 오른쪽에 관절이 찍혀요."
-    : stale
-      ? "그림이 바뀌었어요. 다시 눌러야 관절과 3D에 반영돼요."
-      : state.input
-        ? "오른쪽 관절을 끌어서 고친 뒤 '3D로 만들기'를 눌러요."
-        : "준비됐어요. 누르면 오른쪽에 관절이 찍혀요.";
+        ? "샘플을 고르면 오른쪽에 바로 관절이 찍혀요."
+        : "그리면 오른쪽에 바로 관절이 찍혀요."
+    : "오른쪽 관절을 끌어서 고친 뒤 '3D로 만들기'를 눌러요.";
 }
 function makeRigFromSource() {
   const src = currentSource();
@@ -1703,7 +1706,7 @@ function makeRigFromSource() {
   syncMakeRig();
 }
 $("#makeRig").addEventListener("click", makeRigFromSource);
-$$(".tab").forEach((t) => t.addEventListener("click", () => syncMakeRig()));
+$$(".tab").forEach((t) => t.addEventListener("click", () => sourceChanged()));
 /** 지금 입력(그린 그림·샘플·업로드)을 정하고, 분할해서 관절을 미리 찍는다. 3D 생성은 '다음'에서 */
 function setInput(data, label, { drawing = false } = {}) {
   state.inputVersion++;

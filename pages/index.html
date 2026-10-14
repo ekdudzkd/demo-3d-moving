@@ -117,8 +117,8 @@
         </div>
 
         <div class="makerig">
-          <button class="primary wide" id="makeRig" disabled>이 그림으로 관절 만들기</button>
-          <p class="hint" id="makeRigHint">그림을 그리거나 샘플·사진을 고른 뒤 눌러요. 오른쪽에 관절이 찍혀요.</p>
+          <button class="primary wide" id="makeRig" hidden disabled>이 그림으로 관절 만들기</button>
+          <p class="hint" id="makeRigHint">그리면 오른쪽에 바로 관절이 찍혀요.</p>
         </div>
 
         <details class="options">
@@ -274,7 +274,7 @@
               <span class="righint" id="rigHint"></span>
             </div>
             <canvas id="rigCanvas" aria-label="관절 편집: 점을 끌어서 옮겨요"></canvas>
-            <div class="rigempty" id="rigEmpty" hidden>왼쪽에서 그림을 준비하고 '이 그림으로 관절 만들기'를 누르면<br>여기에 관절이 찍혀요<br><small>점을 끌어서 위치를 고칠 수 있어요</small></div>
+            <div class="rigempty" id="rigEmpty" hidden>왼쪽에 그림을 그리거나 사진·샘플을 고르면<br>여기에 바로 관절이 찍혀요<br><small>점을 끌어서 위치를 고칠 수 있어요</small></div>
           </div>
           <div class="hud" id="hud">
             <div class="score" id="score"></div>
