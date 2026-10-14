@@ -82,8 +82,16 @@
             <div class="drawhint" id="drawHint">여기에 하나의 물체를 그려 보세요<br><small>윤곽선만 그려도 안쪽이 채워집니다</small></div>
           </div>
           <div class="tools">
-            <div class="swatches" id="swatches"></div>
+            <div class="swatches" id="swatches">
+              <label class="swatch custom" id="customSwatch" title="원하는 색 고르기">
+                <input type="color" id="penColor" value="#e4572e" aria-label="원하는 색 고르기">
+              </label>
+            </div>
             <div class="sizes" id="sizes"></div>
+            <label class="sizeslider" title="붓 굵기">
+              <input type="range" id="penSize" min="2" max="80" step="1" value="18" aria-label="붓 굵기">
+              <output id="penSizeOut">18px</output>
+            </label>
             <button class="ghost" id="eraser" aria-pressed="false">지우개</button>
             <button class="ghost" id="clearDraw">전체 지우기</button>
           </div>

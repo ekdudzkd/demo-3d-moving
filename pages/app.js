@@ -148,30 +148,69 @@ function clearDrawing() {
   $("#drawHint").hidden = false;
 }
 clearDrawing();
-for (const c of COLORS) {
+// 팔레트: 자주 쓰는 6색 + 원하는 색(색 고르기). 고른 색은 최근 색으로 앞쪽에 남는다
+function selectSwatch(el) {
+  $$(".swatch").forEach((s) => s.classList.toggle("selected", s === el));
+}
+function setColor(c, el) {
+  pen.color = c;
+  pen.eraser = false;
+  $("#eraser").setAttribute("aria-pressed", "false");
+  selectSwatch(el);
+}
+function addSwatch(c, { recent = false } = {}) {
   const b = document.createElement("button");
-  b.className = "swatch" + (c === pen.color ? " selected" : "");
+  b.type = "button";
+  b.className = "swatch" + (recent ? " recent" : "");
   b.style.background = c;
+  b.dataset.color = c;
   b.setAttribute("aria-label", `색 ${c}`);
-  b.addEventListener("click", () => {
-    pen.color = c;
-    pen.eraser = false;
-    $("#eraser").setAttribute("aria-pressed", "false");
-    $$(".swatch").forEach((s) => s.classList.toggle("selected", s === b));
-  });
-  $("#swatches").append(b);
+  b.addEventListener("click", () => setColor(c, b));
+  const custom = $("#customSwatch");
+  if (recent) custom.after(b);
+  else custom.before(b);
+  return b;
+}
+for (const c of COLORS) {
+  const b = addSwatch(c);
+  if (c === pen.color) b.classList.add("selected");
+}
+const colorInput = $("#penColor");
+colorInput.addEventListener("input", () => {
+  // 고르는 동안은 바로 반영 (색 고르기 칸에 지금 색 표시)
+  $("#customSwatch").style.setProperty("--pick", colorInput.value);
+  setColor(colorInput.value, $("#customSwatch"));
+});
+colorInput.addEventListener("change", () => {
+  // 다 고르면 최근 색으로 남긴다 (팔레트에 없을 때만, 최근 색은 4개까지)
+  const c = colorInput.value.toLowerCase();
+  if ($$(".swatch[data-color]").some((s) => s.dataset.color.toLowerCase() === c)) return;
+  const b = addSwatch(c, { recent: true });
+  setColor(c, b);
+  const recents = $$(".swatch.recent");
+  recents.slice(4).forEach((r) => r.remove());
+});
+
+// 굵기: 자주 쓰는 3개 + 슬라이더(2~80px)
+const sizeInput = $("#penSize");
+function setSize(v) {
+  pen.size = v;
+  sizeInput.value = v;
+  $("#penSizeOut").textContent = `${v}px`;
+  $$(".size").forEach((x) => x.classList.toggle("selected", Number(x.dataset.size) === v));
 }
 for (const s of SIZES) {
   const b = document.createElement("button");
-  b.className = "size" + (s === pen.size ? " selected" : "");
+  b.type = "button";
+  b.className = "size";
+  b.dataset.size = s;
   b.setAttribute("aria-label", `굵기 ${s}`);
   b.innerHTML = `<i style="width:${4 + s / 3}px;height:${4 + s / 3}px"></i>`;
-  b.addEventListener("click", () => {
-    pen.size = s;
-    $$(".size").forEach((x) => x.classList.toggle("selected", x === b));
-  });
+  b.addEventListener("click", () => setSize(s));
   $("#sizes").append(b);
 }
+sizeInput.addEventListener("input", () => setSize(Number(sizeInput.value)));
+setSize(pen.size);
 $("#eraser").addEventListener("click", (e) => {
   pen.eraser = !pen.eraser;
   e.currentTarget.setAttribute("aria-pressed", String(pen.eraser));
