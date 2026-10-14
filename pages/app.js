@@ -396,8 +396,13 @@ async function run(imageData, label) {
   } catch (err) {
     fail(step, err);
   } finally {
-    busy(false);
+    // 어떤 오류가 나도 버튼이 잠긴 채 남지 않게 먼저 푼다
     state.busy = false;
+    try {
+      busy(false);
+    } catch (e) {
+      console.error(e);
+    }
     syncStage();
     syncMakeRig();
   }
@@ -1453,7 +1458,7 @@ let rigHover = null;
 function initRig(seg) {
   const tid = chooseTemplate(seg.mask, seg.size);
   state.rig = { templateId: tid, joints: {}, seg, forInput: state.inputVersion, userEdited: false };
-  if (tid !== "none") state.rig.joints[tid] = estimateJoints(seg.mask, seg.size, tid);
+  if (tid !== "none") state.rig.joints[tid] = estimateJoints(seg.mask, seg.size, tid, { ink: seg.ink });
   rigCut = null;
   if (state.view === "rig") renderRig();
 }
@@ -1470,7 +1475,7 @@ function setRigTemplate(tid) {
   const r = state.rig;
   if (!r) return;
   r.templateId = tid;
-  if (tid !== "none" && !r.joints[tid]) r.joints[tid] = estimateJoints(r.seg.mask, r.seg.size, tid);
+  if (tid !== "none" && !r.joints[tid]) r.joints[tid] = estimateJoints(r.seg.mask, r.seg.size, tid, { ink: r.seg.ink });
   // 옆모습 네발 동물은 머리 쪽 옆면이 앞(W)이어야 다리가 그림 평면 안에서 자연스럽게 움직인다
   if (tid === "quad" && state.edit && state.edit.heading === "front") {
     const J = r.joints.quad;
@@ -1640,7 +1645,7 @@ $$("#rigPane [data-tpl]").forEach((b) => b.addEventListener("click", () => setRi
 $("#rigAuto").addEventListener("click", () => {
   const r = state.rig;
   if (!r || r.templateId === "none") return;
-  r.joints[r.templateId] = estimateJoints(r.seg.mask, r.seg.size, r.templateId);
+  r.joints[r.templateId] = estimateJoints(r.seg.mask, r.seg.size, r.templateId, { ink: r.seg.ink });
   renderRig();
   rigChanged();
 });
@@ -1753,10 +1758,20 @@ async function goShape() {
   if (!state.input?.data) return showError("먼저 왼쪽에서 그림을 준비하고 '이 그림으로 관절 만들기'를 눌러요.");
   // 그림이 그대로면 다시 만들지 않는다(6방향에서 고친 내용 유지)
   if (state.builtFor === state.inputVersion && (state.edit || state.views)) return setStage("shape");
+  if (state.busy) return showError("아직 처리 중이에요. 잠시 뒤 다시 눌러 주세요.");
   setStage("shape");
-  await run(state.input.data, state.input.label);
-  if (document.body.dataset.status === "error") setStage("draw");
-  else setStage("shape");
+  try {
+    await run(state.input.data, state.input.label);
+  } catch (e) {
+    fail("generate", e);
+  }
+  if (document.body.dataset.status === "error") {
+    setStage("draw");
+    // 위쪽 알림은 7초 뒤 사라지므로, 버튼 아래에도 이유를 남긴다
+    const hint = $("#makeRigHint");
+    hint.textContent = `3D로 만들지 못했어요: ${$("#err").textContent || "알 수 없는 오류"}`;
+    hint.classList.add("stale");
+  } else setStage("shape");
 }
 function goWorld() {
   if (!state.edit) return;

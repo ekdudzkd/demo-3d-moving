@@ -549,6 +549,7 @@ export function segment(img) {
   const cw = (img.width / side) * S;
   const ch = (img.height / side) * S;
   const rect = [Math.floor((S - cw) / 2), Math.floor((S - ch) / 2), Math.ceil((S + cw) / 2) - 1, Math.ceil((S + ch) / 2) - 1];
+  const rawMask = mask;
   mask = clean ? refineClean(mask, S, rect) : refineMask(cleanMask(mask, S, S), S, S, rect);
   let fg = 0;
   for (let i = 0; i < N; i++) fg += mask[i];
@@ -558,10 +559,14 @@ export function segment(img) {
   }
   const warnings = [];
   if (coverage > 0.9) warnings.push("전경이 화면 대부분을 차지합니다. 배경이 함께 잡혔을 수 있습니다.");
+  // 선(잉크)만: 구멍 채우기 전 마스크 ∩ 최종 마스크. 관절 추정이 붙은 다리를 셀 때 쓴다
+  const ink = new Uint8Array(N);
+  for (let i = 0; i < N; i++) ink[i] = rawMask[i] & mask[i];
   return {
     rgba,
     hires,
     mask,
+    ink,
     size: S,
     source,
     threshold,

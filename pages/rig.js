@@ -135,10 +135,10 @@ export function chooseTemplate(mask, S) {
 }
 
 /** 마스크에서 관절 위치를 어림잡는다. 정확하지 않아도 되고, 편집기에서 끌어서 고친다 */
-export function estimateJoints(mask, S, templateId) {
+export function estimateJoints(mask, S, templateId, { ink = null } = {}) {
   const b = bbox(mask, S);
   if (!b) return null;
-  const J = templateId === "quad" ? quadJoints(mask, S, b) : humanJoints(mask, S, b);
+  const J = templateId === "quad" ? quadJoints(mask, S, b, ink) : humanJoints(mask, S, b);
   const out = {};
   for (const [k, [x, y]] of Object.entries(J)) out[k] = [Math.min(1, Math.max(0, (x + 0.5) / S)), Math.min(1, Math.max(0, (y + 0.5) / S))];
   return out;
@@ -265,7 +265,44 @@ function humanJoints(mask, S, b) {
   };
 }
 
-function quadJoints(mask, S, b) {
+/** y행에서 x0..x1 사이 전경 구간들의 가운데 x */
+function runsAt(m, S, y, x0, x1) {
+  const out = [];
+  for (let x = x0; x <= x1; ) {
+    if (!m[y * S + x]) {
+      x++;
+      continue;
+    }
+    let e = x;
+    while (e + 1 <= x1 && m[y * S + e + 1]) e++;
+    out.push((x + e) / 2);
+    x = e + 1;
+  }
+  return out;
+}
+
+/**
+ * 다리가 붙어 한 덩어리로 보일 때(발끝이 옆 다리에 닿아 다리 사이가 채워짐) 선(잉크)만 보고 다리를 센다.
+ * 다리 중간 높이 줄에서 선이 8개면 윤곽선 다리 4개(두 선씩 짝), 4개면 다리 4개. 안 되면 null.
+ */
+function legsFromInk(ink, S, x0, x1, ya, yb) {
+  const votes = new Map();
+  for (let y = Math.round(ya); y <= Math.round(yb); y++) {
+    const r = runsAt(ink, S, y, x0, x1);
+    if (r.length !== 8 && r.length !== 4) continue;
+    const legs = r.length === 8 ? [0, 2, 4, 6].map((i) => (r[i] + r[i + 1]) / 2) : r;
+    const k = r.length;
+    if (!votes.has(k)) votes.set(k, []);
+    votes.get(k).push(legs);
+  }
+  // 더 많은 줄에서 나온 쪽, 같으면 8(윤곽선)
+  let best = null;
+  for (const [k, list] of votes) if (!best || list.length > best.list.length || (list.length === best.list.length && k === 8)) best = { k, list };
+  if (!best || best.list.length < 2) return null;
+  return [0, 1, 2, 3].map((i) => best.list.reduce((s, l) => s + l[i], 0) / best.list.length);
+}
+
+function quadJoints(mask, S, b, ink = null) {
   const { x0, x1, y0, y1, W, H, cx } = b;
   const colTop = (x) => {
     x = Math.round(Math.max(x0, Math.min(x1, x)));
@@ -286,7 +323,35 @@ function quadJoints(mask, S, b) {
   // 머리 쪽: 양 끝 25% 기둥 중 더 높이 올라간 쪽
   const topL = Math.min(...Array.from({ length: Math.max(1, Math.round(0.25 * W)) }, (_, i) => colTop(x0 + i)));
   const topR = Math.min(...Array.from({ length: Math.max(1, Math.round(0.25 * W)) }, (_, i) => colTop(x1 - i)));
-  const dir = topR <= topL ? 1 : -1; // 머리가 +x 쪽이면 1
+  let dir = topR <= topL ? 1 : -1; // 머리가 +x 쪽이면 1
+  // 목을 세운 그림: 가장 높이 솟은 부분(위 20% 안에 드는 기둥들)이 좁게 몰려 있으면 그게 머리
+  let raised = null;
+  {
+    let ra = Infinity;
+    let rb = -Infinity;
+    for (let x = x0; x <= x1; x++) {
+      if (colTop(x) <= y0 + 0.2 * H) {
+        ra = Math.min(ra, x);
+        rb = Math.max(rb, x);
+      }
+    }
+    if (rb - ra <= 0.5 * W) {
+      let sx = 0;
+      let sy = 0;
+      let n = 0;
+      for (let y = y0; y <= y0 + 0.3 * H; y++)
+        for (let x = ra; x <= rb; x++)
+          if (mask[y * S + x]) {
+            sx += x;
+            sy += y;
+            n++;
+          }
+      if (n) {
+        raised = [sx / n, sy / n];
+        dir = raised[0] >= cx ? 1 : -1;
+      }
+    }
+  }
   // 다리: 발굽 위 띠(아래 6~16%)를 빈틈으로 나누고, 안 되면 맨 아래 띠로
   const bandXs = (ya, yb) => {
     const xs = [];
@@ -298,7 +363,24 @@ function quadJoints(mask, S, b) {
   if (cl.length < 2) cl = split(bandXs(y1 - 0.05 * H, y1));
   // 두 덩어리인데 각각 넓으면 앞다리 둘·뒷다리 둘이 붙어 보이는 것 → 덩어리마다 두 다리로 나눈다
   if (cl.length === 2 && cl.every((c) => c.b - c.a > 0.1 * W)) cl = cl.flatMap((c) => [{ c: c.a + (c.b - c.a) * 0.25 }, { c: c.b - (c.b - c.a) * 0.25 }]);
-  let legs = cl.map((c) => c.c).sort((p, q) => (q - p) * dir); // 머리 쪽부터
+  let legs = cl.map((c) => c.c);
+  if (legs.length < 4) {
+    // 다리 사이가 메워져 덩어리가 적게 나오면: 선(잉크)으로 세고, 그래도 안 되면 다리 띠 폭에 고르게 4개
+    const ya = belly + 0.25 * (y1 - belly);
+    const yb = belly + 0.6 * (y1 - belly);
+    const byInk = ink ? legsFromInk(ink, S, x0, x1, ya, yb) : null;
+    if (byInk) legs = byInk;
+    else {
+      const xs = bandXs(ya, yb);
+      if (xs.length) {
+        xs.sort((p, q) => p - q);
+        const a = xs[Math.floor(xs.length * 0.03)];
+        const c = xs[Math.floor(xs.length * 0.97)];
+        if (c - a > 0.35 * W) legs = [0.1, 0.35, 0.65, 0.9].map((t) => a + (c - a) * t);
+      }
+    }
+  }
+  legs.sort((p, q) => (q - p) * dir); // 머리 쪽부터
   if (legs.length === 0) legs = [cx + dir * 0.3 * W, cx - dir * 0.3 * W];
   if (legs.length === 1) legs = [legs[0], cx - dir * 0.3 * W];
   let front;
@@ -331,7 +413,7 @@ function quadJoints(mask, S, b) {
         hy += y;
         hn++;
       }
-  const head = hn ? [hx / hn, hy / hn] : [dir > 0 ? x1 : x0, y0 + 0.2 * H];
+  const head = raised || (hn ? [hx / hn, hy / hn] : [dir > 0 ? x1 : x0, y0 + 0.2 * H]);
   const neck = [(withers[0] + head[0]) / 2, Math.min(withers[1], head[1]) + Math.abs(withers[1] - head[1]) * 0.35];
   // 꼬리: 반대쪽 끝 기둥에서 가장 바깥 전경점
   const tx = dir > 0 ? x0 : x1;
