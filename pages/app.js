@@ -1489,29 +1489,14 @@ function setRigTemplate(tid) {
   renderRig();
   rigChanged();
 }
+/** 관절 화면 배치: 그림 전체(왼쪽 캔버스와 같은 틀)를 가운데에 고정해서 보여 준다.
+ * 그림 크기에 맞춰 확대하면 획을 그을 때마다 화면이 커졌다 작아졌다 해서 정신없다 */
 function rigLayout() {
-  const r = state.rig;
   const cv = $("#rigCanvas");
   const box = cv.getBoundingClientRect();
-  const S = r.seg.size;
-  let x0 = S;
-  let x1 = 0;
-  let y0 = S;
-  let y1 = 0;
-  for (let y = 0; y < S; y++)
-    for (let x = 0; x < S; x++)
-      if (r.seg.mask[y * S + x]) {
-        x0 = Math.min(x0, x);
-        x1 = Math.max(x1, x);
-        y0 = Math.min(y0, y);
-        y1 = Math.max(y1, y);
-      }
-  const pad = 0.08;
-  const bw = (x1 - x0 + 1) / S;
-  const bh = (y1 - y0 + 1) / S;
-  const k = Math.min((box.width - 40) / (bw * (1 + 2 * pad)), (box.height - 30) / (bh * (1 + 2 * pad)));
-  const ox = box.width / 2 - ((x0 / S + bw / 2) * k);
-  const oy = box.height / 2 - ((y0 / S + bh / 2) * k);
+  const k = Math.max(1, Math.min(box.width - 40, box.height - 30));
+  const ox = (box.width - k) / 2;
+  const oy = (box.height - k) / 2;
   return { box, k, ox, oy, toScreen: ([ix, iy]) => [ox + ix * k, oy + iy * k], toImage: (sx, sy) => [(sx - ox) / k, (sy - oy) / k] };
 }
 function renderRig() {
@@ -1547,6 +1532,12 @@ function renderRig() {
   ctx.fillStyle = "#fffdf8";
   ctx.fillRect(0, 0, L.box.width, L.box.height);
   ctx.imageSmoothingEnabled = true;
+  // 왼쪽 캔버스와 같은 틀
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(L.ox, L.oy, L.k, L.k);
+  ctx.strokeStyle = "rgba(37,50,59,.15)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(L.ox + 0.5, L.oy + 0.5, L.k - 1, L.k - 1);
   ctx.drawImage(rigCut, L.ox, L.oy, L.k, L.k);
   if (r.templateId === "none") return;
   const tpl = TEMPLATES[r.templateId];
