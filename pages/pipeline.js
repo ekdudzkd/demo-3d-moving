@@ -297,7 +297,9 @@ function refineMask(mask, w, h) {
 }
 
 function refineClean(mask, S) {
-  let m = close(mask, S, S, 2);
+  // 닫기 반지름 1: 경계선 띠(가장자리 1px 표시)가 이미 획을 이어 주므로 크게 닫지 않는다.
+  // 반지름 2로 닫으면 두 신발처럼 가까운 두 부분이 붙어, 다리 사이 빈틈이 '구멍'으로 채워졌다
+  let m = close(mask, S, S, 1);
   m = fillHoles(m, S, S);
   // 라벨·바닥 그림자처럼 가는 다리로 붙은 덩어리를 떼어 낸다: 크게 열어 가장 큰 덩어리만 남기고,
   // 원래 마스크 안에서 다시 키워 물체 모양은 그대로 되살린다 (형태학적 재구성)
@@ -308,7 +310,7 @@ function refineClean(mask, S) {
     for (let i = 0; i < d.length; i++) d[i] &= m[i];
     grown = d;
   }
-  return close(grown, S, S, 2);
+  return close(grown, S, S, 1);
 }
 
 /**

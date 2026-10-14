@@ -120,8 +120,9 @@ export function makeSkinned(geometry, material, info, theta) {
         rot(`ua${s}`, -(run ? 0.6 : 0.4) * amp * Math.sin(p) + (kind === "idle" ? 0.04 * Math.sin(t * 1.6 + (s === "L" ? 0 : 1.7)) : 0));
         rot(`fa${s}`, (run ? 0.7 : 0.25) * amp);
       }
-      rot("chest", (run ? 0.18 : 0.06) * amp);
-      rot("head", -(run ? 0.1 : 0.03) * amp);
+      // 가슴만 살짝 숙이고 머리는 가슴과 같이 움직인다(머리를 반대로 돌리면 목의 큰 삼각형이 늘어나 입·얼굴 그림이 번져 보임)
+      rot("chest", (run ? 0.12 : 0) * amp);
+      rot("head", 0);
       // 두 발이 땅에 닿게 골반을 살짝 내리고, 걸음마다 통통
       const bob = height * (run ? 0.05 : 0.025) * amp * Math.abs(Math.sin(ph));
       bones.root.position.copy(rest.root).addScaledVector(up, bob - height * 0.02 * amp);
