@@ -117,7 +117,8 @@ for (const s of SAMPLES) {
   b.addEventListener("click", async () => {
     if (state.busy) return;
     selectSample(s.id);
-    setInput(await loadSample(s), `샘플: ${s.name}`);
+    state.sample = { data: await loadSample(s), label: `샘플: ${s.name}` };
+    sourceChanged();
   });
   sampleBox.append(b);
 }
@@ -302,24 +303,32 @@ drawCanvas.addEventListener("pointermove", (e) => {
     pen.last = null;
   }),
 );
-// 그린 그림이 바뀌면 잠시 뒤 관절 미리보기를 다시 계산한다
-let drawTimer = 0;
+// 그린 그림이 바뀌면 '관절 만들기'를 다시 누르라고 표시만 한다 (관절은 버튼을 눌러야 갱신)
 function drawingChanged() {
-  clearTimeout(drawTimer);
-  drawTimer = setTimeout(() => {
-    selectSample(null);
-    if (pen.drawn) setInput(dctx.getImageData(0, 0, drawCanvas.width, drawCanvas.height), "직접 그린 그림", { drawing: true });
-    else setInput(null, "", { drawing: true });
-  }, 250);
+  sourceChanged();
 }
 
 // 업로드
 async function useFile(file) {
   if (!file || !file.type.startsWith("image/")) return showError("이미지 파일(PNG·JPG·WebP)을 골라 주세요.");
   const bmp = await createImageBitmap(file);
-  selectSample(null);
-  setInput(imageToData(bmp, 768), `업로드: ${file.name}`);
+  const data = imageToData(bmp, 768);
+  state.photo = { data, label: `업로드: ${file.name}` };
+  // 원본 사진을 그대로 보여 준다
+  const cv = $("#photoCanvas");
+  cv.width = data.width;
+  cv.height = data.height;
+  cv.getContext("2d").putImageData(data, 0, 0);
+  $("#photoName").textContent = file.name;
+  $("#photoClean").checked = P.looksLikePhoto(data); // 종이·화이트보드 사진이면 기본으로 밝기 고르게
+  $("#drop").hidden = true;
+  $("#photoWrap").hidden = false;
+  $("#photoTools").hidden = false;
+  $("#file").value = "";
+  sourceChanged();
 }
+$("#photoNew").addEventListener("click", () => $("#file").click());
+$("#photoClean").addEventListener("change", sourceChanged);
 $("#file").addEventListener("change", (e) => useFile(e.target.files[0]));
 const drop = $("#drop");
 ["dragenter", "dragover"].forEach((t) =>
@@ -330,6 +339,13 @@ const drop = $("#drop");
 );
 ["dragleave", "drop"].forEach((t) => drop.addEventListener(t, () => drop.classList.remove("over")));
 drop.addEventListener("drop", (e) => {
+  e.preventDefault();
+  useFile(e.dataTransfer.files[0]);
+});
+// 사진을 올린 뒤에도 미리보기에 새 사진을 끌어다 놓으면 바꾼다
+const photoWrap = $("#photoWrap");
+photoWrap.addEventListener("dragover", (e) => e.preventDefault());
+photoWrap.addEventListener("drop", (e) => {
   e.preventDefault();
   useFile(e.dataTransfer.files[0]);
 });
@@ -383,6 +399,7 @@ async function run(imageData, label) {
     busy(false);
     state.busy = false;
     syncStage();
+    syncMakeRig();
   }
 }
 
@@ -1634,6 +1651,54 @@ window.__d2wRig = () => state.rig; // 테스트·디버그용
 // 단계: 1 그리기·관절 → 2 3D 확인(6방향·메시) → 3 월드 미리보기 → 월드 입장
 // ---------------------------------------------------------------------------
 const STAGES = ["draw", "shape", "world"];
+/** 지금 왼쪽 탭에서 준비된 그림 (없으면 null) */
+function currentSource() {
+  const tab = $(".tab.active")?.dataset.tab;
+  if (tab === "draw") return pen.drawn ? { data: dctx.getImageData(0, 0, drawCanvas.width, drawCanvas.height), label: "직접 그린 그림", drawing: true, key: "draw" } : null;
+  if (tab === "upload" && state.photo) {
+    const clean = $("#photoClean").checked;
+    return { data: clean ? P.flattenPaper(state.photo.data) : state.photo.data, label: state.photo.label + (clean ? " (밝기 고르게)" : ""), key: `photo:${state.photo.label}:${clean}` };
+  }
+  if (tab === "samples" && state.sample) return { ...state.sample, key: `sample:${state.sample.label}` };
+  return null;
+}
+let sourceRev = 0;
+/** 왼쪽 그림이 바뀜: 이미 만든 관절과 달라졌으면 버튼에 표시 */
+function sourceChanged() {
+  sourceRev++;
+  syncMakeRig();
+}
+function syncMakeRig() {
+  const tab = $(".tab.active")?.dataset.tab;
+  const ready = tab === "draw" ? pen.drawn : tab === "upload" ? !!state.photo : !!state.sample;
+  const stale = ready && state.input && state.madeRev !== sourceRev;
+  const btn = $("#makeRig");
+  btn.disabled = !ready || state.busy;
+  btn.classList.toggle("stale", !!stale);
+  btn.textContent = state.input && !stale ? "관절 다시 만들기" : "이 그림으로 관절 만들기";
+  const hint = $("#makeRigHint");
+  hint.classList.toggle("stale", !!stale);
+  hint.textContent = !ready
+    ? tab === "upload"
+      ? "사진을 올린 뒤 눌러요. 오른쪽에 관절이 찍혀요."
+      : tab === "samples"
+        ? "샘플을 고른 뒤 눌러요. 오른쪽에 관절이 찍혀요."
+        : "그림을 그린 뒤 눌러요. 오른쪽에 관절이 찍혀요."
+    : stale
+      ? "그림이 바뀌었어요. 다시 눌러야 관절과 3D에 반영돼요."
+      : state.input
+        ? "오른쪽 관절을 끌어서 고친 뒤 '3D로 만들기'를 눌러요."
+        : "준비됐어요. 누르면 오른쪽에 관절이 찍혀요.";
+}
+function makeRigFromSource() {
+  const src = currentSource();
+  if (!src) return;
+  state.madeRev = sourceRev;
+  setInput(src.data, src.label, { drawing: !!src.drawing });
+  syncMakeRig();
+}
+$("#makeRig").addEventListener("click", makeRigFromSource);
+$$(".tab").forEach((t) => t.addEventListener("click", () => syncMakeRig()));
 /** 지금 입력(그린 그림·샘플·업로드)을 정하고, 분할해서 관절을 미리 찍는다. 3D 생성은 '다음'에서 */
 function setInput(data, label, { drawing = false } = {}) {
   state.inputVersion++;
@@ -1684,7 +1749,8 @@ function syncStage() {
   next.disabled = state.busy || (st === "draw" ? !state.input?.data : !state.edit);
 }
 async function goShape() {
-  if (!state.input?.data) return showError("먼저 그림을 그리거나 샘플·파일을 고르세요.");
+  if (state.input && state.madeRev !== sourceRev && currentSource()) makeRigFromSource();
+  if (!state.input?.data) return showError("먼저 왼쪽에서 그림을 준비하고 '이 그림으로 관절 만들기'를 눌러요.");
   // 그림이 그대로면 다시 만들지 않는다(6방향에서 고친 내용 유지)
   if (state.builtFor === state.inputVersion && (state.edit || state.views)) return setStage("shape");
   setStage("shape");
@@ -2118,4 +2184,5 @@ loop();
 // 시작: 1단계(그리기·관절)에서 기다린다. 그림을 그리거나 샘플을 고르면 오른쪽에 관절이 찍힌다
 // ---------------------------------------------------------------------------
 setStage("draw");
+syncMakeRig();
 document.body.dataset.status = "ready";

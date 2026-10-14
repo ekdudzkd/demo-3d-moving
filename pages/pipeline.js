@@ -289,21 +289,49 @@ function cleanMask(mask, w, h, minAreaRatio = 0.001) {
   return m;
 }
 
-function refineMask(mask, w, h) {
+/**
+ * 주인공 덩어리 고르기: 사진 가장자리에 걸친 덩어리(뒤쪽 사람·벽·액자 틀)보다
+ * 가장자리에서 떨어진 덩어리(종이 위 그림)를 고른다. 떨어진 덩어리가 너무 작으면(가장 큰 것의 15% 미만) 가장 큰 것.
+ * rect = 원본 그림이 놓인 영역 [x0, y0, x1, y1] (정사각형으로 채운 여백 제외)
+ */
+export function keepMain(mask, w, h, rect = [0, 0, w - 1, h - 1]) {
+  const { labels, count, sizes } = labelComponents(mask, w, h, 1, true);
+  if (count <= 1) return mask;
+  const [x0, y0, x1, y1] = rect;
+  const edge = new Uint8Array(count + 1);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const l = labels[y * w + x];
+      if (l && (x <= x0 + 1 || y <= y0 + 1 || x >= x1 - 1 || y >= y1 - 1)) edge[l] = 1;
+    }
+  }
+  let best = 1;
+  let inner = 0;
+  for (let i = 1; i <= count; i++) {
+    if (sizes[i] > sizes[best]) best = i;
+    if (!edge[i] && (!inner || sizes[i] > sizes[inner])) inner = i;
+  }
+  const pick = inner && sizes[inner] >= 0.15 * sizes[best] ? inner : best;
+  const out = new Uint8Array(mask.length);
+  for (let i = 0; i < out.length; i++) out[i] = labels[i] === pick ? 1 : 0;
+  return out;
+}
+
+function refineMask(mask, w, h, rect) {
   let m = open(mask, w, h, 1);
-  m = keepLargest(m, w, h);
+  m = keepMain(m, w, h, rect);
   m = fillHoles(m, w, h);
   return close(m, w, h, 2);
 }
 
-function refineClean(mask, S) {
+function refineClean(mask, S, rect) {
   // 닫기 반지름 1: 경계선 띠(가장자리 1px 표시)가 이미 획을 이어 주므로 크게 닫지 않는다.
   // 반지름 2로 닫으면 두 신발처럼 가까운 두 부분이 붙어, 다리 사이 빈틈이 '구멍'으로 채워졌다
   let m = close(mask, S, S, 1);
   m = fillHoles(m, S, S);
   // 라벨·바닥 그림자처럼 가는 다리로 붙은 덩어리를 떼어 낸다: 크게 열어 가장 큰 덩어리만 남기고,
   // 원래 마스크 안에서 다시 키워 물체 모양은 그대로 되살린다 (형태학적 재구성)
-  const core = keepLargest(open(m, S, S, 4), S, S);
+  const core = keepMain(open(m, S, S, 4), S, S, rect);
   let grown = core;
   for (let k = 0; k < 6; k++) {
     const d = dilate(grown, S, S, 1);
@@ -350,6 +378,103 @@ export function hysteresisMask(dist, S, lo, hi) {
 }
 
 /** 그림 → 전경 마스크. 반환 rgba는 SEG_SIZE 정사각형. */
+// ---------------------------------------------------------------------------
+// 사진 보정: 종이·화이트보드에 그린 그림을 찍은 사진 (조명 얼룩·회색 판·액자)
+// ---------------------------------------------------------------------------
+
+/** 테두리 색이 고르지 않으면(조명·질감·주변 물건) 사진으로 본다. 디지털 그림(단색 배경)은 false */
+export function looksLikePhoto(img) {
+  const small = resizeRGBA(squarePad(img), 128);
+  const N = 128 * 128;
+  const lab = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const [L, A, B] = rgbToLab(small.data[i * 4], small.data[i * 4 + 1], small.data[i * 4 + 2]);
+    lab[i * 3] = L;
+    lab[i * 3 + 1] = A;
+    lab[i * 3 + 2] = B;
+  }
+  const border = borderPixels(small, 2);
+  const bg = [0, 1, 2].map((c) => median(border.map((i) => lab[i * 3 + c])));
+  const d = border.map((i) => Math.hypot(lab[i * 3] - bg[0], lab[i * 3 + 1] - bg[1], lab[i * 3 + 2] - bg[2])).sort((a, b) => a - b);
+  return (d[Math.floor(d.length * 0.7)] ?? 0) >= CLEAN_BORDER_NOISE;
+}
+
+/**
+ * 종이·화이트보드 사진을 고르게 편다: 종이는 흰색, 선·색은 또렷하게.
+ * 약 64칸 격자에서 '밝고 채도 낮은' 칸만 종이로 골라 채널마다 2차 곡면으로 종이 밝기를 맞추고, 그 값으로 나눈다.
+ * 색칠한 넓은 면은 종이 후보가 아니라 색이 지워지지 않는다. 종이가 거의 안 보이면 그대로 돌려준다.
+ */
+export function flattenPaper(img) {
+  const { width: W, height: H, data } = img;
+  const k = Math.max(1, Math.ceil(Math.max(W, H) / 64));
+  const gw = Math.ceil(W / k);
+  const gh = Math.ceil(H / k);
+  const cells = [];
+  for (let gy = 0; gy < gh; gy++) {
+    for (let gx = 0; gx < gw; gx++) {
+      const px = [];
+      for (let y = gy * k; y < Math.min(H, gy * k + k); y++) {
+        for (let x = gx * k; x < Math.min(W, gx * k + k); x++) {
+          const i = (y * W + x) * 4;
+          px.push([data[i], data[i + 1], data[i + 2]]);
+        }
+      }
+      px.sort((a, b) => b[0] + b[1] + b[2] - (a[0] + a[1] + a[2]));
+      const top = px.slice(0, Math.max(1, Math.ceil(px.length * 0.2))); // 칸 안 밝은 20% = 종이 색 후보
+      cells.push({ x: (gx + 0.5) / gw, y: (gy + 0.5) / gh, m: [0, 1, 2].map((c) => top.reduce((s, p) => s + p[c], 0) / top.length) });
+    }
+  }
+  const lum = (m) => (m[0] + m[1] + m[2]) / 3;
+  const ls = cells.map((c) => lum(c.m)).sort((a, b) => a - b);
+  const bright = ls[Math.floor(ls.length * 0.5)];
+  const paper = cells.filter((c) => lum(c.m) >= bright * 0.85 && Math.max(...c.m) - Math.min(...c.m) < 45);
+  if (paper.length < 12) return img;
+  const basis = (x, y) => [1, x, y, x * x, y * y, x * y];
+  const coef = [0, 1, 2].map((ch) => {
+    const A = Array.from({ length: 6 }, () => new Float64Array(6));
+    const B = new Float64Array(6);
+    for (const c of paper) {
+      const f = basis(c.x, c.y);
+      for (let a = 0; a < 6; a++) {
+        B[a] += f[a] * c.m[ch];
+        for (let b = 0; b < 6; b++) A[a][b] += f[a] * f[b];
+      }
+    }
+    return solveSmall(A, B);
+  });
+  const out = new Uint8ClampedArray(data.length);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const f = basis(x / W, y / H);
+      const i = (y * W + x) * 4;
+      for (let ch = 0; ch < 3; ch++) {
+        let bg = 0;
+        for (let a = 0; a < 6; a++) bg += coef[ch][a] * f[a];
+        const v = data[i + ch] / Math.max(40, bg); // 종이 ≈ 1
+        out[i + ch] = Math.round(255 * Math.min(1, Math.max(0, (v - 0.08) / 0.8))); // 종이(0.88 이상)는 흰색, 선은 진하게
+      }
+      out[i + 3] = data[i + 3];
+    }
+  }
+  return { width: W, height: H, data: out };
+}
+function solveSmall(A, B) {
+  const n = B.length;
+  const M = A.map((r, i) => [...r, B[i]]);
+  for (let c = 0; c < n; c++) {
+    let p = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+    [M[c], M[p]] = [M[p], M[c]];
+    const d = M[c][c] || 1e-12;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = M[r][c] / d;
+      for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k];
+    }
+  }
+  return M.map((r, i) => r[n] / (r[i] || 1e-12));
+}
+
 export function segment(img) {
   const started = now();
   const padded = squarePad(img);
@@ -419,7 +544,12 @@ export function segment(img) {
     }
   }
   // 깨끗한 배경은 가는 경계선을 먼저 닫고 채운다(열기를 먼저 하면 경계선이 지워짐)
-  mask = clean ? refineClean(mask, S) : refineMask(cleanMask(mask, S, S), S, S);
+  // 원본이 놓인 영역(정사각형 여백 제외): 여기 가장자리에 걸친 덩어리는 배경일 가능성이 크다
+  const side = Math.max(img.width, img.height);
+  const cw = (img.width / side) * S;
+  const ch = (img.height / side) * S;
+  const rect = [Math.floor((S - cw) / 2), Math.floor((S - ch) / 2), Math.ceil((S + cw) / 2) - 1, Math.ceil((S + ch) / 2) - 1];
+  mask = clean ? refineClean(mask, S, rect) : refineMask(cleanMask(mask, S, S), S, S, rect);
   let fg = 0;
   for (let i = 0; i < N; i++) fg += mask[i];
   const coverage = fg / N;

@@ -73,7 +73,7 @@
 
         <div class="tabpane" data-pane="samples" hidden>
           <div class="samples" id="samples"></div>
-          <p class="hint">공개 샘플(CC0, <code>assets/samples/</code>). 고르면 오른쪽에 관절이 나타나요. 아래 '3D로 만들기'를 누르면 변환해요.</p>
+          <p class="hint">공개 샘플(CC0, <code>assets/samples/</code>). 고른 뒤 아래 '이 그림으로 관절 만들기'를 눌러요.</p>
         </div>
 
         <div class="tabpane" data-pane="draw">
@@ -97,15 +97,28 @@
             <button class="ghost" id="redoDraw" disabled title="다시 하기 (Ctrl+Y)">↷ 다시</button>
             <button class="ghost" id="clearDraw">전체 지우기</button>
           </div>
-          <p class="hint">그리면 오른쪽에 관절이 자동으로 찍혀요. 다 그렸으면 아래 '3D로 만들기'를 눌러요.</p>
+
         </div>
 
         <div class="tabpane" data-pane="upload" hidden>
           <label class="drop" id="drop">
             <input type="file" id="file" accept="image/png,image/jpeg,image/webp">
             <strong>이미지 선택 또는 끌어다 놓기</strong>
-            <span>단색 배경 위 물체 1개 · 투명 PNG도 가능</span>
+            <span>단색 배경 위 물체 1개 · 투명 PNG도 가능 · 종이·화이트보드 사진도 돼요</span>
           </label>
+          <div class="photowrap" id="photoWrap" hidden>
+            <canvas id="photoCanvas" aria-label="올린 사진"></canvas>
+            <small class="photoname" id="photoName"></small>
+          </div>
+          <div class="tools" id="photoTools" hidden>
+            <label class="check" title="조명 얼룩·회색 판을 고르게 펴서 종이는 흰색, 선은 또렷하게"><input type="checkbox" id="photoClean"> 사진 밝기 고르게 (종이·화이트보드)</label>
+            <button type="button" class="ghost" id="photoNew">다른 사진 넣기</button>
+          </div>
+        </div>
+
+        <div class="makerig">
+          <button class="primary wide" id="makeRig" disabled>이 그림으로 관절 만들기</button>
+          <p class="hint" id="makeRigHint">그림을 그리거나 샘플·사진을 고른 뒤 눌러요. 오른쪽에 관절이 찍혀요.</p>
         </div>
 
         <details class="options">
@@ -261,7 +274,7 @@
               <span class="righint" id="rigHint"></span>
             </div>
             <canvas id="rigCanvas" aria-label="관절 편집: 점을 끌어서 옮겨요"></canvas>
-            <div class="rigempty" id="rigEmpty" hidden>왼쪽에 그림을 그리면 여기에 관절이 자동으로 찍혀요<br><small>점을 끌어서 위치를 고칠 수 있어요</small></div>
+            <div class="rigempty" id="rigEmpty" hidden>왼쪽에서 그림을 준비하고 '이 그림으로 관절 만들기'를 누르면<br>여기에 관절이 찍혀요<br><small>점을 끌어서 위치를 고칠 수 있어요</small></div>
           </div>
           <div class="hud" id="hud">
             <div class="score" id="score"></div>
