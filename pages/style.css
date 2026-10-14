@@ -298,3 +298,13 @@ table.diff code { font-size: 10.5px; background: none; padding: 0; color: #8a949
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* 관절(뼈대) 편집 */
+.rigpane { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; background: #ece6da; }
+.rigbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 10px; }
+.rigtpl { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+.rigtpl button { border: 0; border-radius: 0; background: transparent; padding: 6px 12px; font-weight: 600; }
+.rigtpl button[aria-checked="true"] { background: var(--ink); color: #fff; }
+.righint { font-size: 12px; color: var(--ink-2); }
+#rigCanvas { flex: 1; width: 100%; min-height: 0; touch-action: none; cursor: grab; display: block; }
+#rigCanvas.dragging { cursor: grabbing; }

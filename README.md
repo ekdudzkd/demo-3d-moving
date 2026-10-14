@@ -9,7 +9,7 @@
 → 3D 생성(TripoSR) → 메시 검사 → 자동 보정 → GLB → 충돌체 → 웹 월드
 ```
 
-**브라우저 데모:** https://jngbnss.github.io/draw2world-ai/ — 샘플·직접 그리기·업로드 → 분할 → 3D 메시 → 검사·보정 → 6방향 설계도 확인(말로 고치기: "세워줘", "더 두껍게") → 앞쪽(W 방향) 지정 → 3D 월드. GPU 모델 대신 MockAdapter와 같은 실루엣 돌출(로컬 기하 대체)로 동작한다 (`pages/`). 로컬 미리보기: `cp backend/app/edit/basis.json pages/ && python -m http.server -d pages 8093`.
+**브라우저 데모:** https://jngbnss.github.io/draw2world-ai/ — 샘플·직접 그리기·업로드 → 분할 → 3D 메시 → 검사·보정 → 6방향 설계도 확인(말로 고치기: "세워줘", "더 두껍게") → 앞쪽(W 방향) 지정 → 3D 월드(**월드 입장**: 전체화면 월드에서 100m 달리기·높이뛰기·양궁·50m 수영·줄다리기·오케스트라 지휘를 해당 구역에서 플레이, 말도 그 자리에서 다시 고치기). GPU 모델 대신 MockAdapter와 같은 실루엣 돌출(로컬 기하 대체)로 동작한다 (`pages/`). 로컬 미리보기: `cp backend/app/edit/basis.json pages/ && python -m http.server -d pages 8093`.
 
 > 한 장의 이미지를 바탕으로 AI가 추정한 3D 모델입니다. 보이지 않는 부분은 실제 모습과 다를 수 있습니다.
 

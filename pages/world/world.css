@@ -1,0 +1,165 @@
+/* 전체화면 월드: 기존 데모의 색(종이색·잉크·갈색 포인트)과 버튼 모양을 그대로 쓴다 */
+body.wf-open { overflow: hidden; }
+.wf { position: fixed; inset: 0; z-index: 1000; background: #bfe0e6; color: var(--ink); font-family: var(--font); overflow: hidden; }
+.wf-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.wf button:not(.primary):not(.ghost) { cursor: pointer; }
+.wf kbd { font: 700 11px/1 var(--font); padding: 3px 6px; border-radius: 6px; background: rgba(255,255,255,.22); border: 1px solid rgba(255,255,255,.35); margin-left: 4px; }
+.wf button.ghost kbd { background: var(--bg); border-color: var(--line); }
+
+.wf-top { position: absolute; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; pointer-events: none; z-index: 3; }
+.wf-in-event .wf-left { display: none; }
+.wf-left { display: grid; gap: 8px; pointer-events: auto; min-width: 0; }
+.wf-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; pointer-events: auto; }
+.wf-gems:empty { display: none; }
+.wf-gems { justify-self: start; background: rgba(255,253,248,.94); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-weight: 700; box-shadow: var(--shadow); }
+.wf-zones { background: rgba(255,253,248,.94); border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px; box-shadow: var(--shadow); font-size: 13px; max-width: 280px; }
+.wf-zones summary { cursor: pointer; font-weight: 700; }
+.wf-zones ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.wf-zones li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+.wf-zones em { font-style: normal; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.wf-zones button { padding: 3px 10px; font-size: 12px; }
+
+.wf-prompt { position: absolute; left: 50%; bottom: max(64px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 3; }
+.wf-prompt button { padding: 12px 20px; font-size: 16px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 6px; }
+.wf-prompt small { opacity: .75; font-weight: 500; margin-left: 8px; }
+.wf-help { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); max-width: calc(100% - 24px); background: rgba(255,253,248,.88); border-radius: 10px; padding: 6px 12px; font-size: 12.5px; color: var(--ink-2); z-index: 2; pointer-events: none; }
+.wf-help:empty { display: none; }
+
+.wf-event { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+.wf-event button, .wf-event input, .wf-event .wf-overlay { pointer-events: auto; }
+.wf-box { position: absolute; display: grid; gap: 8px; }
+.wf-tl { top: 64px; left: max(12px, env(safe-area-inset-left)); }
+.wf-tr { top: 64px; right: max(12px, env(safe-area-inset-right)); justify-items: end; }
+.wf-bl { bottom: 56px; left: max(12px, env(safe-area-inset-left)); }
+.wf-br { bottom: 56px; right: max(12px, env(safe-area-inset-right)); }
+.wf-tc { top: 64px; left: 50%; transform: translateX(-50%); }
+.wf-center { top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+.wf-stats { display: flex; gap: 8px; flex-wrap: wrap; }
+.wf-stat { background: rgba(255,253,248,.94); border: 1px solid var(--line); border-radius: 12px; padding: 6px 14px; box-shadow: var(--shadow); min-width: 84px; }
+.wf-stat small { display: block; color: var(--ink-2); font-size: 11px; font-weight: 600; }
+.wf-stat strong { font-size: 22px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.wf-meter { background: rgba(255,253,248,.94); border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px 10px; box-shadow: var(--shadow); min-width: 190px; }
+.wf-meter small { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; font-weight: 700; color: var(--ink-2); margin-bottom: 4px; }
+.wf-bar { height: 10px; border-radius: 6px; background: var(--bg); overflow: hidden; border: 1px solid var(--line); }
+.wf-bar i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .08s linear; }
+.wf-meter.warn .wf-bar i { background: var(--err); }
+.wf-meter.gold .wf-bar i { background: var(--accent-2); }
+.wf-msg-line { background: rgba(37,50,59,.9); color: #fff; padding: 8px 16px; border-radius: 12px; font-weight: 700; max-width: min(90vw, 560px); }
+.wf-note { background: rgba(255,253,248,.94); border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; font-size: 13px; box-shadow: var(--shadow); max-width: 360px; }
+.wf-count { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); font-size: clamp(64px, 14vw, 140px); font-weight: 800; color: #fff; text-shadow: 0 4px 24px rgba(37,50,59,.55); pointer-events: none; }
+
+.wf-overlay { position: absolute; inset: 0; background: rgba(37,50,59,.38); display: grid; place-items: center; padding: 16px; }
+.wf-card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 16px 48px -16px rgba(37,50,59,.5); padding: 22px 24px; width: min(480px, 100%); max-height: 100%; overflow: auto; display: grid; gap: 12px; }
+.wf-card h2 { margin: 0; font-size: 22px; }
+.wf-lede { margin: 0; color: var(--ink-2); }
+.wf-howto, .wf-rows { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 14px; }
+.wf-howto dt, .wf-rows dt { font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+.wf-howto dd, .wf-rows dd { margin: 0; }
+.wf-rows dd { font-weight: 700; font-variant-numeric: tabular-nums; }
+.wf-best, .wf-newrec { margin: 0; font-size: 13px; color: var(--ink-2); }
+.wf-newrec { color: var(--ok); font-weight: 800; font-size: 15px; }
+.wf-row { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+.wf-toasts { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; z-index: 6; pointer-events: none; }
+.wf-toast { background: rgba(37,50,59,.92); color: #fff; padding: 10px 18px; border-radius: 14px; font-weight: 700; text-align: center; animation: wfpop 1.8s forwards; }
+@keyframes wfpop { 0% { opacity: 0; transform: translateY(8px); } 12% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+.wf-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: min(380px, 100%); background: var(--paper); border-left: 1px solid var(--line); box-shadow: -12px 0 32px -16px rgba(37,50,59,.4); z-index: 5; display: grid; grid-template-rows: auto auto 1fr auto auto auto; gap: 10px; padding: 14px; padding-top: max(14px, env(safe-area-inset-top)); }
+.wf-drawer[hidden] { display: none; }
+.wf-drawer header { display: flex; justify-content: space-between; align-items: center; }
+.wf-dnote { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.wf-chat { overflow: auto; display: flex; flex-direction: column; gap: 6px; min-height: 80px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
+.wf-msg { font-size: 13px; padding: 6px 10px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); }
+.wf-msg.user { background: var(--ink); color: #fff; align-self: flex-end; border-color: var(--ink); }
+.wf-msg.warn { background: var(--warn-bg); border-color: #e5cc9a; }
+.wf-msg.error { background: var(--err-bg); border-color: #e3b0aa; }
+.wf-msg.ok { background: var(--ok-bg); border-color: #b5d9c1; }
+.wf-msg button { display: block; margin-top: 6px; }
+.wf-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 96px; overflow: auto; }
+.wf-chips button { border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; }
+.wf-chips button:hover { border-color: var(--ink); }
+.wf-dform { display: flex; gap: 8px; }
+.wf-dform input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: #fff; }
+
+@media (max-width: 640px) {
+  .wf-zones { max-width: 200px; }
+  .wf-top { flex-direction: column; align-items: stretch; }
+  .wf-actions { justify-content: flex-start; }
+}
+
+/* 미리보기 아래 월드 입장 줄 */
+.enterbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-top: 12px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
+.enterbar strong { display: block; font-size: 15px; }
+.enterbar span { color: var(--ink-2); font-size: 13px; }
+.enterbar button { padding: 10px 20px; }
+
+/* 높이뛰기 HUD */
+.wf-sheet { background: rgba(255,253,248,.94); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; box-shadow: var(--shadow); min-width: 150px; }
+.wf-sheet small { display: block; color: var(--ink-2); font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+.wf-sheet .sr { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; padding: 1px 0; font-variant-numeric: tabular-nums; }
+.wf-sheet .sr.cur { font-weight: 800; }
+.wf-hjbox { width: min(360px, 80vw); }
+.wf-hjmeter { position: relative; height: 14px; border-radius: 8px; background: #e7e2d6; overflow: hidden; }
+.wf-hjmeter i { position: absolute; top: 0; bottom: 0; }
+.wf-hjmeter i.ok { left: calc(100% - 4.5 / 12 * 100%); right: calc(0.3 / 12 * 100%); background: #f1d98c; }
+.wf-hjmeter i.best { left: calc(100% - 3.2 / 12 * 100%); right: calc(0.8 / 12 * 100%); background: #7cc68f; }
+.wf-hjmeter .dot { position: absolute; top: 1px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--ink); }
+.wf-hjnow { margin-top: 4px; font-weight: 700; font-size: 13px; text-align: center; }
+.wf-hjbox[data-zone="best"] .wf-hjnow { color: #2b8a4a; }
+
+/* 줄다리기 HUD */
+.wf-tugbox { width: min(420px, 80vw); }
+.wf-tugline { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 12px; }
+.wf-tugline > div { position: relative; flex: 1; height: 12px; border-radius: 8px; background: linear-gradient(90deg, #6f8fe8 0 10%, #e7e2d6 10% 90%, #e98a7a 90%); }
+.wf-tugline .mark { position: absolute; top: -3px; width: 8px; height: 18px; margin-left: -4px; border-radius: 3px; background: var(--ink); }
+
+/* 양궁 HUD */
+.wf-arcard { display: flex; gap: 4px; background: rgba(255,253,248,.94); border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: var(--shadow); }
+.wf-arcard div { min-width: 30px; height: 34px; display: grid; place-items: center; border-radius: 8px; background: #efe9db; font-weight: 800; font-variant-numeric: tabular-nums; }
+.wf-arcard div.cur { outline: 2px solid var(--ink); }
+.wf-arcard div.tot { background: transparent; min-width: 56px; }
+.wf-scope { padding: 6px; }
+
+/* 지휘 HUD */
+.wf-orsec { background: rgba(255,253,248,.94); border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; box-shadow: var(--shadow); max-width: 320px; }
+.wf-orsec small { display: block; color: var(--ink-2); font-size: 11px; font-weight: 600; }
+.wf-orsec strong { display: block; font-size: 16px; margin: 2px 0; }
+.wf-ortl { display: flex; gap: 6px; }
+.wf-ortl > div { position: relative; width: 120px; padding: 6px 8px; border-radius: 10px; background: rgba(255,253,248,.94); border: 1px solid var(--line); overflow: hidden; font-size: 11px; font-weight: 600; }
+.wf-ortl > div i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #cfe7d6; z-index: 0; }
+.wf-ortl > div span { position: relative; z-index: 1; }
+.wf-ortl > div.cur { outline: 2px solid var(--ink); }
+.wf-orm { background: rgba(255,253,248,.94); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; box-shadow: var(--shadow); width: min(280px, 70vw); }
+.wf-orm small { display: flex; justify-content: space-between; color: var(--ink-2); font-size: 11px; font-weight: 600; }
+.wf-ormeter { position: relative; height: 12px; border-radius: 8px; background: #e7e2d6; margin: 4px 0 8px; overflow: hidden; }
+.wf-ormeter u { position: absolute; top: 0; bottom: 0; background: #9fd4b0; text-decoration: none; }
+.wf-ormeter b { position: absolute; top: 1px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--ink); }
+
+/* 손동작 카메라 미리보기 */
+.wf-cam { position: relative; width: 200px; align-self: flex-end; border-radius: 12px; overflow: hidden; background: #1c252b; box-shadow: var(--shadow); border: 1px solid var(--line); }
+.wf-cam canvas { display: block; width: 100%; height: auto; }
+.wf-cam small { display: block; position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 8px; color: #fff; background: rgba(0,0,0,.45); font-size: 12px; }
+.wf-cam small:empty { display: none; }
+
+/* 종목 중 조작법(오른쪽 위, 늘 보임) + 손동작 카메라를 한 열로 */
+.wf-rcol { position: absolute; top: 112px; right: max(12px, env(safe-area-inset-right)); z-index: 4; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
+.wf-rcol > * { pointer-events: auto; }
+.wf-ctl { width: min(280px, 46vw); background: rgba(255,253,248,.95); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 6px 12px; font-size: 12px; }
+.wf-ctl summary { cursor: pointer; font-weight: 700; font-size: 13px; padding: 2px 0; }
+.wf-ctl summary kbd { font-size: 10px; }
+.wf-ctl dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 6px 0 2px; }
+.wf-ctl dt { font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+.wf-ctl dd { margin: 0; }
+.wf-ctl .hand { color: var(--ink-2); opacity: .7; }
+.wf-ctl .hand.on { opacity: 1; color: #2b8a4a; font-weight: 700; }
+.wf-ctl small { font-weight: 400; }
+@media (max-height: 560px) { .wf-ctl:not([open]) { width: auto; } }
+
+/* 종목 시작: 손으로 / 카메라로 */
+.wf-play { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.2; min-width: 170px; }
+.wf-play small { font-size: 11px; font-weight: 500; opacity: .8; }
+.wf-play kbd { display: none; }
+.wf-card button.wf-play-cam { background: #2b8a4a; border-color: #2b8a4a; color: #fff; }
+.wf-card button.wf-play-body { background: #6b4fd8; border-color: #6b4fd8; color: #fff; }
+.wf-camnote { margin: 10px 0 0; font-size: 12px; color: var(--ink-2); text-align: right; }
+.wf-camnote.err { color: #b3261e; font-weight: 700; }

@@ -9,6 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2325323b'/%3E%3Cpath d='M16 44 32 14l16 30z' fill='%23e3a14a'/%3E%3Cpath d='M32 14v30l16 0z' fill='%23a36b25'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="world/world.css">
   <script type="importmap">
   {
     "imports": {
@@ -222,11 +223,24 @@
           <button class="vt" data-view="repaired">보정 메시</button>
           <button class="vt active" data-view="world">월드</button>
           <button class="vt" data-view="edit">6방향 3D</button>
+          <button class="vt" data-view="rig">관절</button>
         </div>
         <div class="viewport" id="viewport">
           <div class="busy" id="busy" hidden><div class="spinner"></div><span id="busyText">준비 중…</span></div>
           <div class="editgrid" id="editGrid" role="radiogroup" aria-label="패널 선택" hidden></div>
           <div class="editgrid viewsgrid" id="viewsGrid" hidden></div>
+          <div class="rigpane" id="rigPane" hidden>
+            <div class="rigbar">
+              <div class="rigtpl" role="radiogroup" aria-label="뼈대 종류">
+                <button type="button" data-tpl="human" role="radio">사람형</button>
+                <button type="button" data-tpl="quad" role="radio">네발 동물</button>
+                <button type="button" data-tpl="none" role="radio">관절 없음</button>
+              </div>
+              <button type="button" class="ghost" id="rigAuto">자동으로 다시 찾기</button>
+              <span class="righint" id="rigHint"></span>
+            </div>
+            <canvas id="rigCanvas" aria-label="관절 편집: 점을 끌어서 옮겨요"></canvas>
+          </div>
           <div class="hud" id="hud">
             <div class="score" id="score"></div>
             <div class="help" id="help"></div>
@@ -241,6 +255,13 @@
           <label class="check"><input type="checkbox" id="wire"> 와이어프레임</label>
           <label class="check"><input type="checkbox" id="showCollider"> 충돌체 표시</label>
           <span class="legend" id="legend"></span>
+        </div>
+        <div class="enterbar" id="enterBar">
+          <div>
+            <strong>월드 입장</strong>
+            <span>전체화면 월드로 들어가 내 말로 100m 달리기·높이뛰기·양궁·수영·줄다리기·지휘를 즐겨요.</span>
+          </div>
+          <button class="primary" id="enterWorld" disabled>월드 입장 →</button>
         </div>
       </div>
     </section>

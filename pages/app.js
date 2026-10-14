@@ -8,6 +8,8 @@ import * as P from "./pipeline.js";
 import { MODELS, chatWithClaude } from "./llm.js";
 import { planEdit } from "./planner.js";
 import { hullDepth, predictViews } from "./views.js";
+import { openWorld } from "./world/world.js";
+import { TEMPLATES, chooseTemplate, estimateJoints, linesOf } from "./rig.js";
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -312,6 +314,8 @@ async function build(seg, label, makeDepth, onStep) {
   const repairedReport = P.inspectMesh(repair.mesh, th);
   const collider = P.buildCollider(repair.mesh);
   state.result = { seg, gen, rawReport, repair, repairedReport, collider, label };
+  initRig(seg);
+  applyObjectTexture(gen.texture);
   renderQC(state.result);
   buildInspectObjects(state.result);
   setStep("inspect", repairedReport.is_usable ? "done" : "failed");
@@ -369,7 +373,7 @@ function renderSeg(seg, contour) {
   }
   kv($("#segInfo"), [
     ["방식", seg.source === "alpha" ? "투명도(alpha)" : "배경색 거리 (Lab ΔE + Otsu)"],
-    ["임계값", seg.threshold == null ? "alpha ≥ 128" : `ΔE > ${fmt(seg.threshold, 1)}`],
+    ["임계값", seg.threshold == null ? "alpha ≥ 128" : seg.threshold_low != null ? `ΔE > ${fmt(seg.threshold, 1)} (연한 부분은 > ${fmt(seg.threshold_low, 1)}까지 확장)` : `ΔE > ${fmt(seg.threshold, 1)}`],
     ["전경 비율", `${fmt(seg.coverage * 100, 1)}%`],
     ["마스크", `${S}×${S} · 구멍 채움 · 최대 조각만`],
     ["시간", `${seg.elapsed_ms} ms`],
@@ -450,7 +454,7 @@ $("#toWorld").addEventListener("click", () => {
 
 $("#downloadGlb").addEventListener("click", () => {
   if (!state.result) return;
-  const mesh = new THREE.Mesh(meshGeometry(state.result.repair.mesh, false), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 }));
+  const mesh = new THREE.Mesh(meshGeometry(state.result.repair.mesh, false), new THREE.MeshStandardMaterial({ map: objectMaterial.map, vertexColors: !objectMaterial.map, roughness: 0.7 }));
   mesh.name = "draw2world_repaired";
   new GLTFExporter().parse(
     mesh,
@@ -506,6 +510,7 @@ function meshGeometry(mesh, creased = true) {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(mesh.v), 3));
   g.setAttribute("color", new THREE.BufferAttribute(Float32Array.from(mesh.c, toLinear), 3));
+  if (mesh.uv) g.setAttribute("uv", new THREE.BufferAttribute(Float32Array.from(mesh.uv), 2));
   g.setIndex(new THREE.BufferAttribute(Uint32Array.from(mesh.f), 1));
   if (!creased) {
     g.computeVertexNormals();
@@ -514,6 +519,23 @@ function meshGeometry(mesh, creased = true) {
   return toCreasedNormals(g, Math.PI / 5);
 }
 const objectMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.02 });
+
+/** 생성 결과의 텍스처(원본 그림)를 공용 재질에 연결한다. 없으면 정점 색으로 돌아간다. */
+function applyObjectTexture(texture) {
+  if (objectMaterial.map) objectMaterial.map.dispose();
+  let map = null;
+  if (texture) {
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = texture.size;
+    cv.getContext("2d").putImageData(new ImageData(texture.data, texture.size, texture.size), 0, 0);
+    map = new THREE.CanvasTexture(cv);
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.anisotropy = 4;
+  }
+  objectMaterial.map = map;
+  objectMaterial.vertexColors = !map;
+  objectMaterial.needsUpdate = true;
+}
 const wireMaterial = new THREE.MeshBasicMaterial({ color: 0x25323b, wireframe: true, transparent: true, opacity: 0.35 });
 
 function addLights(scene, shadow) {
@@ -944,12 +966,14 @@ const HELP = {
 function setView(v) {
   if (v === "edit" && !state.edit) v = "world";
   if (v === "views" && !state.views) v = "world";
+  if (v === "rig" && !state.rig) v = "world";
   state.view = v;
   $$(".vt").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
   $("#pad").hidden = v !== "world" || !player.ready;
   $("#editGrid").hidden = v !== "edit";
   $("#viewsGrid").hidden = v !== "views";
-  $("#hud").hidden = v === "edit" || v === "views"; // 패널 머리글과 겹치므로 설계도에서는 숨긴다 (안내는 왼쪽 카드)
+  $("#rigPane").hidden = v !== "rig";
+  $("#hud").hidden = v === "edit" || v === "views" || v === "rig"; // 패널 머리글과 겹치므로 설계도에서는 숨긴다 (안내는 왼쪽 카드)
   const waiting = state.edit && !state.edit.placed ? "6방향 설계도를 확인하고 '이 모양으로 월드에 배치'를 누르면 여기에 등장합니다" : "그림을 변환하면 여기에 등장합니다";
   $("#help").textContent = v === "world" && !player.ready ? waiting : (HELP[v] ?? "");
   inspectObjects.raw.visible = v === "raw";
@@ -963,12 +987,16 @@ function setView(v) {
     $("#legend").textContent = `Claude 예상 그림 v${state.views.active} · 크기는 최대 변 1 m 기준`;
     renderViews();
   }
+  if (v === "rig") {
+    $("#legend").textContent = "관절: 점을 끌어서 그림에 맞추면 월드에서 팔다리가 움직여요";
+    renderRig();
+  }
   if (!controls) return;
-  controls.enabled = v !== "edit" && v !== "views";
+  controls.enabled = v !== "edit" && v !== "views" && v !== "rig";
   if (v === "world") {
     controls.autoRotate = false;
     frameWorldCamera(true);
-  } else if (v !== "edit" && v !== "views") {
+  } else if (v !== "edit" && v !== "views" && v !== "rig") {
     controls.autoRotate = true;
     controls.autoRotateSpeed = 1.6;
     frameInspect(inspectObjects[v]);
@@ -1075,6 +1103,7 @@ for (const q of QUICK_PROMPTS) {
 /** 채팅 한 줄. user가 아닌 말은 Claude에 보낼 대화 이력에서 assistant 쪽으로 남긴다 */
 function say(text, tone = "", suggested = null) {
   state.edit?.history.push({ role: tone === "user" ? "user" : "assistant", text });
+  state.worldHost?.say(text, tone, suggested);
   const m = document.createElement("div");
   m.className = `msg ${tone}`;
   m.textContent = text;
@@ -1100,7 +1129,9 @@ function versionText(v) {
 }
 
 function stopEditing() {
+  state.worldHost?.close();
   state.edit = null;
+  syncEnterWorld();
   $("#editCard").hidden = true;
   clearEditObjects();
   if (state.view === "edit") setView("world");
@@ -1193,6 +1224,8 @@ function refreshEdit() {
 
   if (state.edit.placed) spawnPlayer(active.mesh, active.collider, state.edit.heading, false);
   if (state.view === "edit" || state.view === "world") setView(state.view);
+  state.worldHost?.refreshModel(); // 전체화면 월드가 열려 있으면 그 안의 말도 새 버전으로 바꾼다
+  syncEnterWorld();
 }
 
 function editAction(fn, label) {
@@ -1283,6 +1316,231 @@ $("#editForm").addEventListener("submit", (e) => {
   sendEdit($("#editText").value);
 });
 $("#editUndo").addEventListener("click", () => state.edit && editAction(() => state.edit.session.undo(), "되돌리기"));
+
+// ---------------------------------------------------------------------------
+// 관절(뼈대): 분할된 그림 위에 관절을 자동으로 찍고 끌어서 고친다. 월드의 말은 이 관절로 팔다리를 움직인다 (rig.js, world/skin.js)
+// ---------------------------------------------------------------------------
+const RIG_HINT = {
+  human: "점을 끌어서 그림에 맞춰 주세요 · 월드에서 걷거나 100m를 달릴 때 팔다리가 움직여요",
+  quad: "옆모습 네발 동물용이에요 · 앞다리 둘·뒷다리 둘을 끌어서 맞춰 주세요",
+  none: "관절 없이 지금처럼 몸 전체가 통통 튀며 움직여요",
+};
+let rigCut = null; // 배경을 지운 그림(정사각형)
+let rigDrag = null;
+let rigHover = null;
+function initRig(seg) {
+  const tid = chooseTemplate(seg.mask, seg.size);
+  state.rig = { templateId: tid, joints: {}, seg };
+  if (tid !== "none") state.rig.joints[tid] = estimateJoints(seg.mask, seg.size, tid);
+  rigCut = null;
+  if (state.view === "rig") renderRig();
+}
+function rigForWorld() {
+  const r = state.rig;
+  if (!r || r.templateId === "none" || !r.joints[r.templateId]) return null;
+  return { templateId: r.templateId, joints: r.joints[r.templateId], mask: r.seg.mask, S: r.seg.size };
+}
+function rigChanged() {
+  const host = state.worldHost;
+  if (host && !host.active) host.refreshModel();
+}
+function setRigTemplate(tid) {
+  const r = state.rig;
+  if (!r) return;
+  r.templateId = tid;
+  if (tid !== "none" && !r.joints[tid]) r.joints[tid] = estimateJoints(r.seg.mask, r.seg.size, tid);
+  // 옆모습 네발 동물은 머리 쪽 옆면이 앞(W)이어야 다리가 그림 평면 안에서 자연스럽게 움직인다
+  if (tid === "quad" && state.edit && state.edit.heading === "front") {
+    const J = r.joints.quad;
+    const side = J.head[0] >= J.pelvis[0] ? "right" : "left";
+    const sel = $("#heading");
+    if ([...sel.options].some((o) => o.value === side)) {
+      sel.value = side;
+      sel.dispatchEvent(new Event("change"));
+    }
+  }
+  renderRig();
+  rigChanged();
+}
+function rigLayout() {
+  const r = state.rig;
+  const cv = $("#rigCanvas");
+  const box = cv.getBoundingClientRect();
+  const S = r.seg.size;
+  let x0 = S;
+  let x1 = 0;
+  let y0 = S;
+  let y1 = 0;
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++)
+      if (r.seg.mask[y * S + x]) {
+        x0 = Math.min(x0, x);
+        x1 = Math.max(x1, x);
+        y0 = Math.min(y0, y);
+        y1 = Math.max(y1, y);
+      }
+  const pad = 0.08;
+  const bw = (x1 - x0 + 1) / S;
+  const bh = (y1 - y0 + 1) / S;
+  const k = Math.min((box.width - 40) / (bw * (1 + 2 * pad)), (box.height - 30) / (bh * (1 + 2 * pad)));
+  const ox = box.width / 2 - ((x0 / S + bw / 2) * k);
+  const oy = box.height / 2 - ((y0 / S + bh / 2) * k);
+  return { box, k, ox, oy, toScreen: ([ix, iy]) => [ox + ix * k, oy + iy * k], toImage: (sx, sy) => [(sx - ox) / k, (sy - oy) / k] };
+}
+function renderRig() {
+  const r = state.rig;
+  if (!r || state.view !== "rig") return;
+  $$("#rigPane [data-tpl]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.tpl === r.templateId)));
+  $("#rigAuto").disabled = r.templateId === "none";
+  $("#rigHint").textContent = RIG_HINT[r.templateId];
+  const S = r.seg.size;
+  if (!rigCut) {
+    rigCut = document.createElement("canvas");
+    rigCut.width = rigCut.height = S;
+    const g = rigCut.getContext("2d");
+    const img = new ImageData(new Uint8ClampedArray(r.seg.rgba.data), S, S);
+    for (let i = 0; i < S * S; i++) img.data[i * 4 + 3] = r.seg.mask[i] ? 255 : 0;
+    g.putImageData(img, 0, 0);
+  }
+  const cv = $("#rigCanvas");
+  const L = rigLayout();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.max(1, Math.round(L.box.width * dpr));
+  cv.height = Math.max(1, Math.round(L.box.height * dpr));
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, L.box.width, L.box.height);
+  ctx.fillStyle = "#fffdf8";
+  ctx.fillRect(0, 0, L.box.width, L.box.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(rigCut, L.ox, L.oy, L.k, L.k);
+  if (r.templateId === "none") return;
+  const tpl = TEMPLATES[r.templateId];
+  const J = r.joints[r.templateId];
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(37,50,59,.55)";
+  for (const [a, b] of linesOf(tpl)) {
+    const [ax, ay] = L.toScreen(J[a]);
+    const [bx, by] = L.toScreen(J[b]);
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+  }
+  ctx.font = "600 12px system-ui, sans-serif";
+  for (const name of tpl.joints) {
+    const [x, y] = L.toScreen(J[name]);
+    const on = rigDrag?.name === name || rigHover === name;
+    ctx.beginPath();
+    ctx.arc(x, y, on ? 9 : 7, 0, Math.PI * 2);
+    ctx.fillStyle = on ? "#ffb020" : "#d9434f";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#fff";
+    ctx.stroke();
+    const side = /^(sL|eL|hL|hipL|kL|fL)$/.test(name) ? " (왼)" : /^(sR|eR|hR|hipR|kR|fR)$/.test(name) ? " (오)" : "";
+    const text = tpl.labels[name] + side;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255,253,248,.9)";
+    ctx.strokeText(text, x + 10, y - 8);
+    ctx.fillStyle = "#25323b";
+    ctx.fillText(text, x + 10, y - 8);
+  }
+}
+function rigPick(e) {
+  const r = state.rig;
+  if (!r || r.templateId === "none") return null;
+  const L = rigLayout();
+  const sx = e.clientX - L.box.left;
+  const sy = e.clientY - L.box.top;
+  let best = null;
+  let bd = 16;
+  for (const name of TEMPLATES[r.templateId].joints) {
+    const [x, y] = L.toScreen(r.joints[r.templateId][name]);
+    const d = Math.hypot(x - sx, y - sy);
+    if (d < bd) {
+      bd = d;
+      best = name;
+    }
+  }
+  return { name: best, L, sx, sy };
+}
+$("#rigCanvas").addEventListener("pointerdown", (e) => {
+  const p = rigPick(e);
+  if (!p?.name) return;
+  rigDrag = { name: p.name, moved: false };
+  e.currentTarget.setPointerCapture(e.pointerId);
+  e.currentTarget.classList.add("dragging");
+  renderRig();
+});
+$("#rigCanvas").addEventListener("pointermove", (e) => {
+  const r = state.rig;
+  if (!r) return;
+  if (!rigDrag) {
+    const p = rigPick(e);
+    if ((p?.name ?? null) !== rigHover) {
+      rigHover = p?.name ?? null;
+      renderRig();
+    }
+    return;
+  }
+  const L = rigLayout();
+  const [ix, iy] = L.toImage(e.clientX - L.box.left, e.clientY - L.box.top);
+  r.joints[r.templateId][rigDrag.name] = [Math.min(1, Math.max(0, ix)), Math.min(1, Math.max(0, iy))];
+  rigDrag.moved = true;
+  renderRig();
+});
+const endRigDrag = (e) => {
+  if (!rigDrag) return;
+  const moved = rigDrag.moved;
+  rigDrag = null;
+  e.currentTarget.classList.remove("dragging");
+  renderRig();
+  if (moved) rigChanged();
+};
+$("#rigCanvas").addEventListener("pointerup", endRigDrag);
+$("#rigCanvas").addEventListener("pointercancel", endRigDrag);
+$$("#rigPane [data-tpl]").forEach((b) => b.addEventListener("click", () => setRigTemplate(b.dataset.tpl)));
+$("#rigAuto").addEventListener("click", () => {
+  const r = state.rig;
+  if (!r || r.templateId === "none") return;
+  r.joints[r.templateId] = estimateJoints(r.seg.mask, r.seg.size, r.templateId);
+  renderRig();
+  rigChanged();
+});
+if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => state.view === "rig" && renderRig()).observe(viewport);
+window.__d2wRig = () => state.rig; // 테스트·디버그용
+
+// ---------------------------------------------------------------------------
+// 월드 입장 (전체화면 월드 + 종목, pages/world/)
+// ---------------------------------------------------------------------------
+function syncEnterWorld() {
+  const btn = $("#enterWorld");
+  if (btn) btn.disabled = !state.edit;
+}
+function enterFullWorld() {
+  const ed = state.edit;
+  if (!ed || state.worldHost) return;
+  state.worldHost = openWorld({
+    getModel() {
+      const v = ed.session.activeVersion;
+      return { mesh: v.mesh, collider: v.collider, theta: headingRotation(ed.core.panels, ed.heading), rig: rigForWorld() };
+    },
+    makeGeometry: (mesh) => meshGeometry(mesh),
+    material: objectMaterial,
+    headingHalfExtents,
+    edit: {
+      quick: QUICK_PROMPTS,
+      send: (text) => sendEdit(text),
+      undo: () => editAction(() => ed.session.undo(), "되돌리기"),
+    },
+    onClose() {
+      state.worldHost = null;
+    },
+  });
+}
+$("#enterWorld").addEventListener("click", enterFullWorld);
+window.__d2wWorld = () => state.worldHost; // 테스트·디버그용
 $("#editToWorld").addEventListener("click", () => {
   if (!state.edit) return;
   if (state.edit.placed) {
@@ -1661,7 +1919,7 @@ function loop() {
     marker.material.opacity = 0.55 + Math.sin(t * 6) * 0.3;
   }
   controls.update();
-  if (state.view === "views") return; // 예상 그림은 2D 캔버스만 보인다
+  if (state.view === "views" || state.view === "rig") return; // 예상 그림·관절은 2D 캔버스만 보인다
   if (state.view === "edit") renderEditPanels();
   else renderer.render(state.view === "world" ? worldScene : inspectScene, camera);
 }

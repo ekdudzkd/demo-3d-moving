@@ -9,6 +9,7 @@
 // SAM 2·TripoSR 같은 GPU 모델은 돌리지 않는다.
 
 export const SEG_SIZE = 256;
+export const TEX_SIZE = 512; // 3D 표면에 입히는 텍스처 한 변 (얼굴 같은 가는 디테일용)
 export const WORK = 128; // mock.py WORK
 export const DEPTH_RATIO = 0.25; // mock.py DEPTH_RATIO
 export const TARGET_SIZE = 1.0; // repair.py TARGET_SIZE (최대 축 1m)
@@ -310,15 +311,54 @@ function refineClean(mask, S) {
   return close(grown, S, S, 2);
 }
 
+/**
+ * 두 단계 임계값(히스테리시스): dist > hi 인 확실한 전경에서 출발해, dist > lo 인 픽셀 중
+ * 8방향으로 이어진 것만 전경으로 넓힌다. 종이와 색 차이가 작은 연한 부분(머리·얼굴·연필선)이
+ * 진한 부분(옷)에 붙어 있으면 살리고, 떨어져 있는 종이 얼룩은 버린다.
+ */
+export function hysteresisMask(dist, S, lo, hi) {
+  const N = S * S;
+  const mask = new Uint8Array(N);
+  const stack = [];
+  for (let i = 0; i < N; i++) {
+    if (dist[i] > hi) {
+      mask[i] = 1;
+      stack.push(i);
+    }
+  }
+  while (stack.length) {
+    const i = stack.pop();
+    const x = i % S;
+    const y = (i - x) / S;
+    for (let dy = -1; dy <= 1; dy++) {
+      const yy = y + dy;
+      if (yy < 0 || yy >= S) continue;
+      for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx;
+        if (xx < 0 || xx >= S) continue;
+        const j = yy * S + xx;
+        if (!mask[j] && dist[j] > lo) {
+          mask[j] = 1;
+          stack.push(j);
+        }
+      }
+    }
+  }
+  return mask;
+}
+
 /** 그림 → 전경 마스크. 반환 rgba는 SEG_SIZE 정사각형. */
 export function segment(img) {
   const started = now();
-  const rgba = resizeRGBA(squarePad(img), SEG_SIZE);
+  const padded = squarePad(img);
+  const rgba = resizeRGBA(padded, SEG_SIZE);
+  const hires = resizeRGBA(padded, TEX_SIZE);
   const S = SEG_SIZE;
   const N = S * S;
   let mask = new Uint8Array(N);
   let source;
   let threshold = null;
+  let thresholdLow = null;
   let background = null;
   let clean = false;
   if (alphaIsMeaningful(rgba)) {
@@ -349,6 +389,22 @@ export function segment(img) {
     clean = noise < CLEAN_BORDER_NOISE;
     threshold = clean ? Math.max(CLEAN_MIN_DELTA, noise * 3) : Math.max(otsu(scaled) / 2, 15);
     for (let i = 0; i < N; i++) mask[i] = dist[i] > threshold ? 1 : 0;
+    if (!clean) {
+      // 진한 물체(옷)가 Otsu 임계값을 끌어올려 연한 부분이 사라지는 것을 막는다.
+      // 낮은 임계값은 테두리(종이) 색 차이의 95백분위의 3배(최소 ΔE 10)라 종이 질감·조명 얼룩은 넘지 않는다.
+      const p95 = borderDist[Math.floor(borderDist.length * 0.95)] ?? 0;
+      const lo = Math.min(threshold, Math.max(10, p95 * 3));
+      if (lo < threshold) {
+        const grown = hysteresisMask(dist, S, lo, threshold);
+        let g = 0;
+        for (let i = 0; i < N; i++) g += grown[i];
+        // 배경이 통째로 이어져 넘치면(전경 60% 초과) 확장을 버리고 기존 결과를 쓴다
+        if (g / N <= 0.6) {
+          mask = grown;
+          thresholdLow = lo;
+        }
+      }
+    }
     if (clean) {
       // 흰 물체의 밝은 윗부분처럼 배경과 거의 같은 색도, 경계(색이 갑자기 바뀌는 선)로 둘러싸이면 구멍 채우기로 찬다
       for (let y = 0; y < S - 1; y++) {
@@ -372,10 +428,12 @@ export function segment(img) {
   if (coverage > 0.9) warnings.push("전경이 화면 대부분을 차지합니다. 배경이 함께 잡혔을 수 있습니다.");
   return {
     rgba,
+    hires,
     mask,
     size: S,
     source,
     threshold,
+    threshold_low: thresholdLow,
     background,
     coverage,
     warnings,
@@ -719,21 +777,68 @@ function colorSampler(seg) {
     }
   }
   const d = seg.rgba.data;
-  return (x, y) => {
+  const sampler = (x, y) => {
     const px = Math.min(S - 1, Math.max(0, Math.floor((x + 0.5) * S)));
     const py = Math.min(S - 1, Math.max(0, Math.floor((0.5 - y) * S)));
     const n = nearest[py * S + px];
     if (n < 0) return [0.5, 0.5, 0.5];
     return [d[n * 4] / 255, d[n * 4 + 1] / 255, d[n * 4 + 2] / 255];
   };
+  sampler.nearest = nearest;
+  sampler.source = source;
+  return sampler;
 }
 
-export function makeMesh(v, f, c) {
-  return { v: Float64Array.from(v), f: Uint32Array.from(f), c: Float32Array.from(c) };
+/**
+ * 표면에 입힐 텍스처. 윤곽선 안쪽(깎은 마스크)은 원본 그림 그대로, 바깥은 가장 가까운 안쪽 색으로 채운다.
+ * 옆면은 윤곽선 위치의 텍스처를 읽으므로, 검은 윤곽선이 옆면에 번지지 않는다.
+ * 앞·뒷면은 점 색을 섞는 대신 이 그림을 픽셀 단위로 읽어 눈·입 같은 가는 디테일이 남는다.
+ */
+function bakeTexture(seg, sample) {
+  const S = seg.size;
+  const src = seg.hires && seg.hires.width > S ? seg.hires : seg.rgba;
+  const T = src.width;
+  const k = T / S;
+  const out = new Uint8ClampedArray(T * T * 4);
+  for (let y = 0; y < T; y++) {
+    const ly = Math.min(S - 1, Math.floor(y / k));
+    for (let x = 0; x < T; x++) {
+      const lx = Math.min(S - 1, Math.floor(x / k));
+      const li = ly * S + lx;
+      const o = (y * T + x) * 4;
+      let sx = x;
+      let sy = y;
+      if (!sample.source[li]) {
+        const n = sample.nearest[li];
+        if (n < 0) {
+          out[o] = out[o + 1] = out[o + 2] = 128;
+          out[o + 3] = 255;
+          continue;
+        }
+        const nx = n % S;
+        sx = Math.min(T - 1, Math.floor((nx + 0.5) * k));
+        sy = Math.min(T - 1, Math.floor(((n - nx) / S + 0.5) * k));
+      }
+      const s = (sy * T + sx) * 4;
+      out[o] = src.data[s];
+      out[o + 1] = src.data[s + 1];
+      out[o + 2] = src.data[s + 2];
+      out[o + 3] = 255;
+    }
+  }
+  return { size: T, data: out };
+}
+
+export function makeMesh(v, f, c, uv = null) {
+  const m = { v: Float64Array.from(v), f: Uint32Array.from(f), c: Float32Array.from(c) };
+  if (uv) m.uv = Float32Array.from(uv);
+  return m;
 }
 
 export function cloneMesh(m) {
-  return { v: m.v.slice(), f: m.f.slice(), c: m.c.slice() };
+  const out = { v: m.v.slice(), f: m.f.slice(), c: m.c.slice() };
+  if (m.uv) out.uv = m.uv.slice();
+  return out;
 }
 
 /**
@@ -799,10 +904,12 @@ export function generateMesh(seg, { mode = "extrude", artifacts = true, seed = 0
   const sample = colorSampler(seg);
   const v = [];
   const c = [];
+  const uvs = [];
   const f = [];
   const pushV = (x, y, z) => {
     v.push(x, y, z);
     c.push(...sample(x, y));
+    uvs.push(x + 0.5, y + 0.5); // 텍스처 좌표: 입력 그림(정사각형) 위치 그대로, v는 위쪽이 1
     return v.length / 3 - 1;
   };
   for (let i = 0; i < np; i++) pushV(points[i][0], points[i][1], half[i]);
@@ -815,7 +922,7 @@ export function generateMesh(seg, { mode = "extrude", artifacts = true, seed = 0
     const j = (i + 1) % nb;
     f.push(i, np + i, np + j, i, np + j, j);
   }
-  let mesh = makeMesh(v, f, c);
+  let mesh = makeMesh(v, f, c, uvs);
   const info = {
     mode: makeDepth ? "views" : mode,
     contour_points: contour.length,
@@ -831,7 +938,7 @@ export function generateMesh(seg, { mode = "extrude", artifacts = true, seed = 0
   info.vertex_count = mesh.v.length / 3;
   info.face_count = mesh.f.length / 3;
   info.elapsed_ms = Math.round(now() - started);
-  return { mesh, info };
+  return { mesh, info, texture: bakeTexture(seg, sample) };
 }
 
 function icosahedron(r) {
@@ -855,6 +962,7 @@ export function addArtifacts(mesh, seed, layout, injected = []) {
   const uni = (a, b) => a + (b - a) * rnd();
   const v = Array.from(mesh.v);
   const c = Array.from(mesh.c);
+  const uv = mesh.uv ? Array.from(mesh.uv) : null;
   const f = Array.from(mesh.f);
   const color = (i) => [c[i * 3], c[i * 3 + 1], c[i * 3 + 2]];
 
@@ -867,6 +975,7 @@ export function addArtifacts(mesh, seed, layout, injected = []) {
         remap.set(old, v.length / 3);
         v.push(v[old * 3], v[old * 3 + 1], v[old * 3 + 2]);
         c.push(...color(old));
+        if (uv) uv.push(uv[old * 2], uv[old * 2 + 1]);
       }
       f[fi * 3 + k] = remap.get(old);
     }
@@ -897,6 +1006,7 @@ export function addArtifacts(mesh, seed, layout, injected = []) {
     const mIdx = v.length / 3;
     v.push((v[a * 3] + v[b * 3]) / 2, (v[a * 3 + 1] + v[b * 3 + 1]) / 2, (v[a * 3 + 2] + v[b * 3 + 2]) / 2);
     c.push(...color(a));
+    if (uv) uv.push((uv[a * 2] + uv[b * 2]) / 2, (uv[a * 2 + 1] + uv[b * 2 + 1]) / 2);
     f.push(a, b, mIdx);
   }
   injected.push({ code: "degenerate_faces", label: "면적 0인 면 2개", origin: "demo" });
@@ -910,12 +1020,13 @@ export function addArtifacts(mesh, seed, layout, injected = []) {
   for (let i = 0; i < chip.v.length; i += 3) {
     v.push(chip.v[i] + off[0], chip.v[i + 1] + off[1], chip.v[i + 2] + off[2]);
     c.push(0.5, 0.5, 0.5);
+    if (uv) uv.push(0, 0);
   }
   for (const idx of chip.f) f.push(idx + n0);
   injected.push({ code: "small_components", label: "떠 있는 작은 조각 1개", origin: "mock" });
 
   // (e) mock.py: 원점 중심(바닥 아님) + 약간 어긋남
-  const out = makeMesh(v, f, c);
+  const out = makeMesh(v, f, c, uv);
   const [lo, hi2] = bounds(out);
   const shift = [0, 1, 2].map((k) => -(lo[k] + hi2[k]) / 2 + uni(-0.05, 0.05));
   for (let i = 0; i < out.v.length; i += 3) for (let k = 0; k < 3; k++) out.v[i + k] += shift[k];
@@ -1201,11 +1312,12 @@ export function metrics(mesh, budget) {
 }
 
 /** 사용하는 정점만 남기고 번호를 다시 매긴다. */
-export function compact(v, f, c) {
+export function compact(v, f, c, uv = null) {
   const n = v.length / 3;
   const used = new Int32Array(n).fill(-1);
   const nv = [];
   const nc = [];
+  const nuv = [];
   const nf = new Uint32Array(f.length);
   for (let i = 0; i < f.length; i++) {
     const o = f[i];
@@ -1213,27 +1325,34 @@ export function compact(v, f, c) {
       used[o] = nv.length / 3;
       nv.push(v[o * 3], v[o * 3 + 1], v[o * 3 + 2]);
       nc.push(c[o * 3], c[o * 3 + 1], c[o * 3 + 2]);
+      if (uv) nuv.push(uv[o * 2], uv[o * 2 + 1]);
     }
     nf[i] = used[o];
   }
-  return { v: Float64Array.from(nv), f: nf, c: Float32Array.from(nc) };
+  const res = { v: Float64Array.from(nv), f: nf, c: Float32Array.from(nc) };
+  if (uv) res.uv = Float32Array.from(nuv);
+  return res;
 }
 
 function keepFaces(m, keep) {
   const f = [];
   for (let fi = 0; fi < m.f.length / 3; fi++) if (keep(fi)) f.push(m.f[fi * 3], m.f[fi * 3 + 1], m.f[fi * 3 + 2]);
-  return compact(m.v, f, m.c);
+  return compact(m.v, f, m.c, m.uv);
 }
 
 export function mergeVertices(m) {
   const { map, count, first } = weldMap(m.v);
   const v = new Float64Array(count * 3);
   const c = new Float32Array(count * 3);
+  const uv = m.uv ? new Float32Array(count * 2) : null;
   first.forEach((o, i) => {
     v.set(m.v.subarray(o * 3, o * 3 + 3), i * 3);
     c.set(m.c.subarray(o * 3, o * 3 + 3), i * 3);
+    if (uv) uv.set(m.uv.subarray(o * 2, o * 2 + 2), i * 2);
   });
-  return { v, f: m.f.map((i) => map[i]), c };
+  const res = { v, f: m.f.map((i) => map[i]), c };
+  if (uv) res.uv = uv;
+  return res;
 }
 
 export function removeDegenerateFaces(m) {
@@ -1316,7 +1435,7 @@ export function fixNormals(m) {
       v[a + 2] * (v[b] * v[c + 1] - v[b + 1] * v[c]);
   }
   for (let fi = 0; fi < nf; fi++) if (vol[comp[fi]] < 0) [f[fi * 3 + 1], f[fi * 3 + 2]] = [f[fi * 3 + 2], f[fi * 3 + 1]];
-  return { v: m.v, f, c: m.c };
+  return { v: m.v, f, c: m.c, uv: m.uv };
 }
 
 /** trimesh.repair.fill_holes: 삼각형·사각형 크기 구멍만 채운다. */
@@ -1349,7 +1468,7 @@ export function fillSmallHoles(m) {
     if (loop.length === 3) f.push(loop[0], loop[2], loop[1]);
     else f.push(loop[0], loop[3], loop[2], loop[0], loop[2], loop[1]);
   }
-  return { v: m.v, f: Uint32Array.from(f), c: m.c };
+  return { v: m.v, f: Uint32Array.from(f), c: m.c, uv: m.uv };
 }
 
 /**
@@ -1362,6 +1481,7 @@ export function decimate(m, budget) {
   const nv = m.v.length / 3;
   const P = Array.from({ length: nv }, (_, i) => [m.v[i * 3], m.v[i * 3 + 1], m.v[i * 3 + 2]]);
   const C = Array.from({ length: nv }, (_, i) => [m.c[i * 3], m.c[i * 3 + 1], m.c[i * 3 + 2]]);
+  const U = m.uv ? Array.from({ length: nv }, (_, i) => [m.uv[i * 2], m.uv[i * 2 + 1]]) : null;
   const F = Array.from({ length: nf0 }, (_, i) => [m.f[i * 3], m.f[i * 3 + 1], m.f[i * 3 + 2]]);
   const VF = Array.from({ length: nv }, () => new Set());
   F.forEach((t, i) => t.forEach((x) => VF[x].add(i)));
@@ -1449,6 +1569,7 @@ export function decimate(m, budget) {
       // b → a
       P[a] = p;
       C[a] = C[a].map((x, i) => (x + C[b][i]) / 2);
+      if (U) U[a] = U[a].map((x, i) => (x + U[b][i]) / 2);
       for (let k = 0; k < 10; k++) Q[a][k] += Q[b][k];
       for (const fi of shared) {
         for (const x of F[fi]) VF[x].delete(fi);
@@ -1469,8 +1590,9 @@ export function decimate(m, budget) {
   }
   const v = P.flat();
   const c = C.flat();
+  const u = U ? U.flat() : null;
   const f = F.filter(Boolean).flat();
-  return compact(v, f, c);
+  return compact(v, f, c, u);
 }
 
 export function normalizeScale(m) {
@@ -1478,13 +1600,13 @@ export function normalizeScale(m) {
   const size = Math.max(...[0, 1, 2].map((k) => hi[k] - lo[k]));
   if (size <= 0) return m;
   const s = TARGET_SIZE / size;
-  return { v: m.v.map((x) => x * s), f: m.f, c: m.c };
+  return { v: m.v.map((x) => x * s), f: m.f, c: m.c, uv: m.uv };
 }
 
 export function centerAndGround(m) {
   const [lo, hi] = bounds(m);
   const shift = [-(lo[0] + hi[0]) / 2, -lo[1], -(lo[2] + hi[2]) / 2];
-  return { v: m.v.map((x, i) => x + shift[i % 3]), f: m.f, c: m.c };
+  return { v: m.v.map((x, i) => x + shift[i % 3]), f: m.f, c: m.c, uv: m.uv };
 }
 
 export const STEPS = [

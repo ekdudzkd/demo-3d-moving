@@ -285,7 +285,9 @@ export function createEditCore(basis) {
     if (det(m) < 0) {
       for (let i = 0; i < f.length; i += 3) [f[i], f[i + 2]] = [f[i + 2], f[i]];
     }
-    return { v, f, c: v0.c ? v0.c.slice() : new Float32Array(v.length) };
+    const out = { v, f, c: v0.c ? v0.c.slice() : new Float32Array(v.length) };
+    if (v0.uv) out.uv = v0.uv.slice();
+    return out;
   }
 
   /** e0 물체 축 기준 누적 배율 (= 사용자 op 합성 행렬의 열 길이) */
