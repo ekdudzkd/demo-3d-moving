@@ -123,3 +123,20 @@ test("네발: 앞다리 둘·뒷다리 둘이 붙어 한 덩어리여도 네 다
   assert.ok(Math.abs(xs[2] - xs[3]) > 4, `hind ${xs}`);
   assert.ok(Math.min(xs[0], xs[1]) > 74 && Math.max(xs[2], xs[3]) < 51, `${xs}`);
 });
+
+test("머리는 맨 위 점이 아니라 둥근 머리 가운데 (토끼 귀가 위로 솟아도)", () => {
+  const bunny = paint([
+    { x0: 52, x1: 57, y0: 4, y1: 22 }, // 귀
+    { x0: 71, x1: 76, y0: 4, y1: 22 },
+    { cx: 64, cy: 34, r: 14 }, // 머리
+    { x0: 54, x1: 74, y0: 46, y1: 84 }, // 몸통
+    { x0: 30, x1: 54, y0: 52, y1: 58 }, // 팔
+    { x0: 74, x1: 98, y0: 52, y1: 58 },
+    { x0: 55, x1: 62, y0: 84, y1: 122 }, // 다리
+    { x0: 66, x1: 73, y0: 84, y1: 122 },
+  ]);
+  const J = estimateJoints(bunny, S, "human");
+  const [hx, hy] = px(J.head);
+  assert.ok(Math.abs(hx - 64) < 5 && Math.abs(hy - 34) < 7, `head ${hx},${hy}`);
+  assert.ok(px(J.neck)[1] > 40 && px(J.neck)[1] < 56, `neck ${px(J.neck)}`);
+});

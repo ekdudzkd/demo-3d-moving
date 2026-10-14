@@ -81,6 +81,39 @@ function bbox(mask, S) {
       }
   return n ? { x0, x1, y0, y1, W: x1 - x0 + 1, H: y1 - y0 + 1, cx: sx / n, cy: sy / n, n } : null;
 }
+/** 거리 변환(체임퍼 3-4): 각 전경 점에서 가장 가까운 배경까지의 거리(픽셀) */
+function distMap(mask, S) {
+  const INF = 1e9;
+  const d = new Float32Array(S * S);
+  for (let i = 0; i < d.length; i++) d[i] = mask[i] ? INF : 0;
+  const g = (x, y) => (x < 0 || y < 0 || x >= S || y >= S ? 0 : d[y * S + x]);
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      const i = y * S + x;
+      if (!d[i]) continue;
+      d[i] = Math.min(d[i], g(x - 1, y) + 3, g(x, y - 1) + 3, g(x - 1, y - 1) + 4, g(x + 1, y - 1) + 4);
+    }
+  for (let y = S - 1; y >= 0; y--)
+    for (let x = S - 1; x >= 0; x--) {
+      const i = y * S + x;
+      if (!d[i]) continue;
+      d[i] = Math.min(d[i], g(x + 1, y) + 3, g(x, y + 1) + 3, g(x + 1, y + 1) + 4, g(x - 1, y + 1) + 4);
+    }
+  for (let i = 0; i < d.length; i++) d[i] /= 3;
+  return d;
+}
+/** 상자 안에서 거리 변환이 가장 큰 점 {x, y, r}. weight(x, y)로 위쪽 등을 더 쳐줄 수 있다 */
+function deepest(dt, S, xa, xb, ya, yb, weight = () => 1) {
+  let best = null;
+  for (let y = Math.max(0, Math.round(ya)); y <= Math.min(S - 1, Math.round(yb)); y++)
+    for (let x = Math.max(0, Math.round(xa)); x <= Math.min(S - 1, Math.round(xb)); x++) {
+      const r = dt[y * S + x];
+      if (!r) continue;
+      const sc = r * weight(x, y);
+      if (!best || sc > best.sc) best = { x, y, r, sc };
+    }
+  return best;
+}
 /** y행에서 x를 포함하는(없으면 가장 가까운) 전경 구간 [a, b] */
 function runAt(mask, S, y, x) {
   y = Math.max(0, Math.min(S - 1, Math.round(y)));
@@ -158,28 +191,38 @@ function humanJoints(mask, S, b) {
   const med = sorted[sorted.length >> 1] || 1;
   let neckRow = sm.reduce((m, q) => (q.s < m.s ? q : m), sm[0]);
   if (!neckRow || neckRow.s > med * 0.88) neckRow = sm.find((q) => q.y >= y0 + 0.28 * H) || { y: y0 + 0.28 * H, c: cx };
-  // 둥근 머리 아래 가장 잘록한 줄이 목: 머리 폭이 가장 넓은 줄부터 내려가며, 다시 머리보다 넓어지기(어깨·팔) 전까지의 최소 폭.
-  // 막대 인형은 몸통도 가는 선이라 '전체에서 가장 좁은 줄'이 몸통 중간에 잡히므로 이쪽을 우선한다
+  // 머리: 위쪽 42% 안에서 가장 '두꺼운' 점(그림 안쪽으로 가장 깊은 점 = 거리 변환 최댓값).
+  // 맨 위 점을 머리로 잡으면 토끼 귀·머리카락 꼭대기에 찍히므로, 둥근 덩어리의 가운데를 찾는다.
+  // 목은 그 덩어리 아래 가장자리(가운데 + 반지름) 근처
+  const dt = distMap(mask, S);
+  // 위에서부터 줄마다 가장 두꺼운 값을 보며 내려가다, 두께가 크게 줄어드는(목) 첫 봉우리가 머리.
+  // 목이 없이 몸으로 이어지는 그림이면 위쪽 42% 안에서 (위쪽을 조금 더 쳐서) 가장 두꺼운 점
+  let blob = null;
   {
-    let headW = 0;
-    let headI = -1;
-    widths.forEach((q, i) => {
-      if (q.y <= y0 + 0.35 * H && q.w > headW) {
-        headW = q.w;
-        headI = i;
+    let run = null;
+    for (let y = y0; y <= y0 + 0.55 * H; y++) {
+      const m = deepest(dt, S, x0, x1, y, y);
+      if (!m) continue;
+      if (!run || m.r > run.r) run = m;
+      else if (run.r >= 0.05 * H && m.r < 0.7 * run.r) {
+        blob = run;
+        break;
       }
-    });
-    let best = null;
-    for (let i = headI + 1; headI >= 0 && i < widths.length; i++) {
-      const q = widths[i];
-      if (q.w > headW) break;
-      if (q.w > 0 && (!best || q.w < best.w)) best = q;
     }
-    if (best && headW >= 0.12 * W && best.w < 0.7 * headW && best.y < neckRow.y) neckRow = best;
+  }
+  if (!blob) blob = deepest(dt, S, x0, x1, y0, y0 + 0.42 * H, (x, y) => 1 - (0.5 * (y - y0)) / H);
+  let head;
+  if (blob && blob.r >= 0.05 * H) {
+    head = [blob.x, blob.y];
+    const ny = Math.min(y0 + 0.55 * H, blob.y + blob.r * 1.05);
+    const nr = runAt(mask, S, ny, blob.x);
+    neckRow = { y: ny, c: nr ? Math.max(nr[0], Math.min(nr[1], blob.x)) : blob.x };
   }
   const neckY = neckRow.y;
-  const headMid = runAt(mask, S, (y0 + neckY) / 2, cx);
-  const head = [headMid ? (headMid[0] + headMid[1]) / 2 : cx, (y0 + neckY) / 2];
+  if (!head) {
+    const headMid = runAt(mask, S, (y0 + neckY) / 2, cx);
+    head = [headMid ? (headMid[0] + headMid[1]) / 2 : cx, (y0 + neckY) / 2];
+  }
 
   // 다리 x: 신발이 붙어 있어도 갈라져 보이도록 발목 위 띠(아래 5~14%)에서 먼저 나눠 보고, 안 되면 맨 아래 띠로
   const bandXs = (ya, yb) => {
@@ -379,6 +422,7 @@ function quadJoints(mask, S, b, ink = null) {
   let dir = topR <= topL ? 1 : -1; // 머리가 +x 쪽이면 1
   // 목을 세운 그림: 가장 높이 솟은 부분(위 20% 안에 드는 기둥들)이 좁게 몰려 있으면 그게 머리
   let raised = null;
+  let raisedSpan = null;
   {
     let ra = Infinity;
     let rb = -Infinity;
@@ -401,6 +445,7 @@ function quadJoints(mask, S, b, ink = null) {
           }
       if (n) {
         raised = [sx / n, sy / n];
+        raisedSpan = [ra, rb];
         dir = raised[0] >= cx ? 1 : -1;
       }
     }
@@ -451,8 +496,16 @@ function quadJoints(mask, S, b, ink = null) {
   const fmid = (front[0] + front[1]) / 2;
   const hmid = (hind[0] + hind[1]) / 2;
   const bodyMid = (x) => (colTop(x) + belly) / 2;
-  const withers = [fmid, bodyMid(fmid)];
-  const pelvis = [hmid, bodyMid(hmid)];
+  // 어깨(등): 앞다리 위에서 몸통 쪽으로 조금 들어간 곳의 몸통 가운데 (앞다리 바로 위가 머리면 얼굴에 찍히므로)
+  // 등선: 앞·뒷다리 사이 기둥들 윗면의 중앙값. 큰 머리·세운 목 기둥은 등보다 높으므로 등선 아래로 내려 잡는다
+  const tops = [];
+  for (let x = Math.round(Math.min(fmid, hmid)); x <= Math.round(Math.max(fmid, hmid)); x++) tops.push(colTop(x));
+  tops.sort((p, q) => p - q);
+  const backY = tops.length ? tops[tops.length >> 1] : y0;
+  const wx = fmid + (hmid - fmid) * 0.15;
+  const withers = [wx, (Math.max(colTop(wx), backY) + belly) / 2];
+  const pelvis = [hmid, (Math.max(colTop(hmid), backY) + belly) / 2];
+
   // 머리: 머리 쪽 끝 15% 기둥의 위쪽 전경 무게중심
   let hx = 0;
   let hy = 0;
@@ -466,8 +519,15 @@ function quadJoints(mask, S, b, ink = null) {
         hy += y;
         hn++;
       }
-  const head = raised || (hn ? [hx / hn, hy / hn] : [dir > 0 ? x1 : x0, y0 + 0.2 * H]);
-  const neck = [(withers[0] + head[0]) / 2, Math.min(withers[1], head[1]) + Math.abs(withers[1] - head[1]) * 0.35];
+  // 머리: 머리 쪽(솟은 부분 주변, 아니면 머리 쪽 끝 35%)에서 배 위로 가장 두꺼운 점 = 둥근 머리의 가운데 (귀 끝 말고)
+  const qdt = distMap(mask, S);
+  const hxa = raised ? Math.min(raisedSpan[0], raised[0] - 0.15 * W) : dir > 0 ? x1 - 0.35 * W : x0;
+  const hxb = raised ? Math.max(raisedSpan[1], raised[0] + 0.15 * W) : dir > 0 ? x1 : x0 + 0.35 * W;
+  const hb = deepest(qdt, S, hxa, hxb, y0, raised ? y0 + 0.6 * (belly - y0) : belly, (x, y) => 1 - (0.4 * (y - y0)) / H);
+  const head = hb ? [hb.x, hb.y] : raised || (hn ? [hx / hn, hy / hn] : [dir > 0 ? x1 : x0, y0 + 0.2 * H]);
+  const neck = hb
+    ? [head[0] + (withers[0] - head[0]) * 0.5, head[1] + (withers[1] - head[1]) * 0.5]
+    : [(withers[0] + head[0]) / 2, Math.min(withers[1], head[1]) + Math.abs(withers[1] - head[1]) * 0.35];
   // 꼬리: 반대쪽 끝 기둥에서 가장 바깥 전경점
   const tx = dir > 0 ? x0 : x1;
   let tys = [];
