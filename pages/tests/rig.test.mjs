@@ -140,3 +140,19 @@ test("머리는 맨 위 점이 아니라 둥근 머리 가운데 (토끼 귀가 
   assert.ok(Math.abs(hx - 64) < 5 && Math.abs(hy - 34) < 7, `head ${hx},${hy}`);
   assert.ok(px(J.neck)[1] > 40 && px(J.neck)[1] < 56, `neck ${px(J.neck)}`);
 });
+
+test("네발: 꼬리를 높이 세워도 둥근 머리 쪽을 머리로 본다", () => {
+  const cat = paint([
+    { x0: 40, x1: 96, y0: 56, y1: 72 }, // 몸통
+    { cx: 32, cy: 54, r: 13 }, // 머리(왼쪽, 몸통보다 조금 위)
+    { x0: 98, x1: 102, y0: 14, y1: 62 }, // 세운 꼬리(가늘고 머리보다 높음)
+    { x0: 44, x1: 49, y0: 72, y1: 108 },
+    { x0: 56, x1: 61, y0: 72, y1: 108 },
+    { x0: 80, x1: 85, y0: 72, y1: 108 },
+    { x0: 90, x1: 95, y0: 72, y1: 108 },
+  ]);
+  const J = estimateJoints(cat, S, "quad");
+  assert.ok(px(J.head)[0] < 45, `head ${px(J.head)}`);
+  assert.ok(px(J.tail)[0] > 90, `tail ${px(J.tail)}`);
+  assert.ok(px(J.fls)[0] < 65 && px(J.hls)[0] > 75, `legs ${px(J.fls)} ${px(J.hls)}`);
+});

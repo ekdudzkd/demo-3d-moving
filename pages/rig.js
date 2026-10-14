@@ -450,6 +450,30 @@ function quadJoints(mask, S, b, ink = null) {
       }
     }
   }
+  // 머리 쪽 확인: 양 끝(35%)에서 배 위로 가장 두꺼운 곳을 비교한다. 머리는 둥근 덩어리, 꼬리는 가는 선이라
+  // 꼬리를 높이 세운 고양이도 꼬리 쪽을 머리로 보지 않는다. 한쪽이 뚜렷이(1.3배) 두꺼울 때만 따른다
+  const qdt = distMap(mask, S);
+  {
+    // 등선 위로 솟은 부분만 비교한다(몸통은 양쪽 끝에 다 있으니): 가운데 40% 기둥 윗면의 중앙값이 등선
+    const mids = [];
+    for (let x = Math.round(x0 + 0.3 * W); x <= Math.round(x1 - 0.3 * W); x++) mids.push(colTop(x));
+    mids.sort((p, q) => p - q);
+    const back = mids.length ? mids[mids.length >> 1] : y0 + 0.3 * H;
+    const eL = deepest(qdt, S, x0, x0 + 0.35 * W, y0, back - 1);
+    const eR = deepest(qdt, S, x1 - 0.35 * W, x1, y0, back - 1);
+    const rL = eL ? eL.r : 0;
+    const rR = eR ? eR.r : 0;
+    if (Math.max(rL, rR) >= 0.03 * H) {
+      const side = rR >= 1.3 * rL ? 1 : rL >= 1.3 * rR ? -1 : 0;
+      if (side) {
+        dir = side;
+        if (raised && (raised[0] >= cx ? 1 : -1) !== side) {
+          raised = null; // 솟은 부분은 꼬리였다
+          raisedSpan = null;
+        }
+      }
+    }
+  }
   // 다리: 발굽 위 띠(아래 6~16%)를 빈틈으로 나누고, 안 되면 맨 아래 띠로
   const bandXs = (ya, yb) => {
     const xs = [];
@@ -520,7 +544,6 @@ function quadJoints(mask, S, b, ink = null) {
         hn++;
       }
   // 머리: 머리 쪽(솟은 부분 주변, 아니면 머리 쪽 끝 35%)에서 배 위로 가장 두꺼운 점 = 둥근 머리의 가운데 (귀 끝 말고)
-  const qdt = distMap(mask, S);
   const hxa = raised ? Math.min(raisedSpan[0], raised[0] - 0.15 * W) : dir > 0 ? x1 - 0.35 * W : x0;
   const hxb = raised ? Math.max(raisedSpan[1], raised[0] + 0.15 * W) : dir > 0 ? x1 : x0 + 0.35 * W;
   const hb = deepest(qdt, S, hxa, hxb, y0, raised ? y0 + 0.6 * (belly - y0) : belly, (x, y) => 1 - (0.4 * (y - y0)) / H);
