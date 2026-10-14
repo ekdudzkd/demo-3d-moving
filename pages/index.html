@@ -65,18 +65,18 @@
         <div class="card-head">
           <h2>1. 그림 고르기</h2>
           <div class="tabs" role="tablist">
-            <button role="tab" class="tab active" data-tab="samples" aria-selected="true">샘플</button>
-            <button role="tab" class="tab" data-tab="draw" aria-selected="false">직접 그리기</button>
+            <button role="tab" class="tab" data-tab="samples" aria-selected="false">샘플</button>
+            <button role="tab" class="tab active" data-tab="draw" aria-selected="true">직접 그리기</button>
             <button role="tab" class="tab" data-tab="upload" aria-selected="false">업로드</button>
           </div>
         </div>
 
-        <div class="tabpane" data-pane="samples">
+        <div class="tabpane" data-pane="samples" hidden>
           <div class="samples" id="samples"></div>
-          <p class="hint">공개 샘플(CC0, <code>assets/samples/</code>). 고르면 바로 변환합니다.</p>
+          <p class="hint">공개 샘플(CC0, <code>assets/samples/</code>). 고르면 오른쪽에 관절이 나타나요. 아래 '3D로 만들기'를 누르면 변환해요.</p>
         </div>
 
-        <div class="tabpane" data-pane="draw" hidden>
+        <div class="tabpane" data-pane="draw">
           <div class="drawwrap">
             <canvas id="drawCanvas" width="512" height="512" aria-label="그림 그리기 캔버스"></canvas>
             <div class="drawhint" id="drawHint">여기에 하나의 물체를 그려 보세요<br><small>윤곽선만 그려도 안쪽이 채워집니다</small></div>
@@ -93,9 +93,11 @@
               <output id="penSizeOut">18px</output>
             </label>
             <button class="ghost" id="eraser" aria-pressed="false">지우개</button>
+            <button class="ghost" id="undoDraw" disabled title="되돌리기 (Ctrl+Z)">↶ 되돌리기</button>
+            <button class="ghost" id="redoDraw" disabled title="다시 하기 (Ctrl+Y)">↷ 다시</button>
             <button class="ghost" id="clearDraw">전체 지우기</button>
           </div>
-          <button class="primary wide" id="useDrawing">이 그림으로 변환하기</button>
+          <p class="hint">그리면 오른쪽에 관절이 자동으로 찍혀요. 다 그렸으면 아래 '3D로 만들기'를 눌러요.</p>
         </div>
 
         <div class="tabpane" data-pane="upload" hidden>
@@ -225,6 +227,17 @@
 
     <section class="panel stage" aria-label="3D 뷰">
       <div class="stage-inner">
+        <div class="stagebar" id="stageBar">
+          <ol class="stagechips" aria-label="단계">
+            <li data-stage="draw"><span>1</span>그리기·관절</li>
+            <li data-stage="shape"><span>2</span>3D 확인</li>
+            <li data-stage="world"><span>3</span>월드 미리보기</li>
+          </ol>
+          <div class="row">
+            <button class="ghost" id="stagePrev">← 이전</button>
+            <button class="primary" id="stageNext">다음 →</button>
+          </div>
+        </div>
         <div class="viewtabs" role="tablist">
           <button class="vt" data-view="views">예상 그림</button>
           <button class="vt" data-view="raw">원본 메시</button>
@@ -248,6 +261,7 @@
               <span class="righint" id="rigHint"></span>
             </div>
             <canvas id="rigCanvas" aria-label="관절 편집: 점을 끌어서 옮겨요"></canvas>
+            <div class="rigempty" id="rigEmpty" hidden>왼쪽에 그림을 그리면 여기에 관절이 자동으로 찍혀요<br><small>점을 끌어서 위치를 고칠 수 있어요</small></div>
           </div>
           <div class="hud" id="hud">
             <div class="score" id="score"></div>

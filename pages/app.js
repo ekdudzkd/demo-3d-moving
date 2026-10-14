@@ -59,7 +59,7 @@ const METRIC_LABEL = {
   winding_consistent: "면 방향 일관",
 };
 
-const state = { busy: false, seed: 0, result: null, view: "world", lastImage: null, lastLabel: "", edit: null };
+const state = { busy: false, seed: 0, result: null, view: "world", lastImage: null, lastLabel: "", edit: null, stage: "draw", input: null, inputVersion: 0, builtFor: -1 };
 
 // 패널 기준표는 백엔드와 같은 파일 (배포 때 backend/app/edit/basis.json을 복사)
 const editCorePromise = fetch("basis.json")
@@ -117,7 +117,7 @@ for (const s of SAMPLES) {
   b.addEventListener("click", async () => {
     if (state.busy) return;
     selectSample(s.id);
-    run(await loadSample(s), `샘플: ${s.name}`);
+    setInput(await loadSample(s), `샘플: ${s.name}`);
   });
   sampleBox.append(b);
 }
@@ -215,7 +215,57 @@ $("#eraser").addEventListener("click", (e) => {
   pen.eraser = !pen.eraser;
   e.currentTarget.setAttribute("aria-pressed", String(pen.eraser));
 });
-$("#clearDraw").addEventListener("click", clearDrawing);
+// 획 되돌리기·다시 하기 (Ctrl+Z / Ctrl+Y), 최근 30번
+const drawHist = { undo: [], redo: [] };
+const drawSnap = () => ({ img: dctx.getImageData(0, 0, drawCanvas.width, drawCanvas.height), drawn: pen.drawn });
+function syncUndo() {
+  $("#undoDraw").disabled = !drawHist.undo.length;
+  $("#redoDraw").disabled = !drawHist.redo.length;
+}
+function pushDrawHistory() {
+  drawHist.undo.push(drawSnap());
+  if (drawHist.undo.length > 30) drawHist.undo.shift();
+  drawHist.redo = [];
+  syncUndo();
+}
+function restoreDrawing(sn) {
+  dctx.putImageData(sn.img, 0, 0);
+  pen.drawn = sn.drawn;
+  $("#drawHint").hidden = pen.drawn;
+  drawingChanged();
+}
+function undoDraw() {
+  if (!drawHist.undo.length) return;
+  drawHist.redo.push(drawSnap());
+  restoreDrawing(drawHist.undo.pop());
+  syncUndo();
+}
+function redoDraw() {
+  if (!drawHist.redo.length) return;
+  drawHist.undo.push(drawSnap());
+  restoreDrawing(drawHist.redo.pop());
+  syncUndo();
+}
+$("#undoDraw").addEventListener("click", undoDraw);
+$("#redoDraw").addEventListener("click", redoDraw);
+document.addEventListener("keydown", (e) => {
+  if (state.stage !== "draw" || $('[data-pane="draw"]').hidden) return;
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || "") || document.querySelector(".wf")) return;
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && k === "z" && !e.shiftKey) {
+    e.preventDefault();
+    undoDraw();
+  } else if ((e.ctrlKey || e.metaKey) && (k === "y" || (k === "z" && e.shiftKey))) {
+    e.preventDefault();
+    redoDraw();
+  }
+});
+$("#clearDraw").addEventListener("click", () => {
+  if (!pen.drawn) return;
+  pushDrawHistory();
+  clearDrawing();
+  drawingChanged();
+});
 function canvasPoint(e) {
   const r = drawCanvas.getBoundingClientRect();
   return [((e.clientX - r.left) / r.width) * drawCanvas.width, ((e.clientY - r.top) / r.height) * drawCanvas.height];
@@ -232,6 +282,7 @@ function stroke(a, b) {
 }
 drawCanvas.addEventListener("pointerdown", (e) => {
   drawCanvas.setPointerCapture(e.pointerId);
+  pushDrawHistory();
   pen.last = canvasPoint(e);
   stroke(pen.last, [pen.last[0] + 0.01, pen.last[1]]);
   if (!pen.eraser) {
@@ -245,19 +296,29 @@ drawCanvas.addEventListener("pointermove", (e) => {
   stroke(pen.last, p);
   pen.last = p;
 });
-["pointerup", "pointercancel", "pointerleave"].forEach((t) => drawCanvas.addEventListener(t, () => (pen.last = null)));
-$("#useDrawing").addEventListener("click", () => {
-  if (!pen.drawn) return showError("먼저 캔버스에 물체를 하나 그려 주세요.");
-  selectSample(null);
-  run(dctx.getImageData(0, 0, drawCanvas.width, drawCanvas.height), "직접 그린 그림");
-});
+["pointerup", "pointercancel", "pointerleave"].forEach((t) =>
+  drawCanvas.addEventListener(t, () => {
+    if (pen.last) drawingChanged();
+    pen.last = null;
+  }),
+);
+// 그린 그림이 바뀌면 잠시 뒤 관절 미리보기를 다시 계산한다
+let drawTimer = 0;
+function drawingChanged() {
+  clearTimeout(drawTimer);
+  drawTimer = setTimeout(() => {
+    selectSample(null);
+    if (pen.drawn) setInput(dctx.getImageData(0, 0, drawCanvas.width, drawCanvas.height), "직접 그린 그림", { drawing: true });
+    else setInput(null, "", { drawing: true });
+  }, 250);
+}
 
 // 업로드
 async function useFile(file) {
   if (!file || !file.type.startsWith("image/")) return showError("이미지 파일(PNG·JPG·WebP)을 골라 주세요.");
   const bmp = await createImageBitmap(file);
   selectSample(null);
-  run(imageToData(bmp, 768), `업로드: ${file.name}`);
+  setInput(imageToData(bmp, 768), `업로드: ${file.name}`);
 }
 $("#file").addEventListener("change", (e) => useFile(e.target.files[0]));
 const drop = $("#drop");
@@ -273,8 +334,10 @@ drop.addEventListener("drop", (e) => {
   useFile(e.dataTransfer.files[0]);
 });
 
-$("#rerun").addEventListener("click", () => {
-  if (state.lastImage) run(state.lastImage, state.lastLabel);
+$("#rerun").addEventListener("click", async () => {
+  if (!state.input?.data) return showError("먼저 그림을 그리거나 고르세요.");
+  state.builtFor = -1;
+  await goShape();
 });
 
 // ---------------------------------------------------------------------------
@@ -319,6 +382,7 @@ async function run(imageData, label) {
   } finally {
     busy(false);
     state.busy = false;
+    syncStage();
   }
 }
 
@@ -353,7 +417,8 @@ async function build(seg, label, makeDepth, onStep) {
   const repairedReport = P.inspectMesh(repair.mesh, th);
   const collider = P.buildCollider(repair.mesh);
   state.result = { seg, gen, rawReport, repair, repairedReport, collider, label };
-  initRig(seg);
+  if (state.rig && state.rig.forInput === state.inputVersion) state.rig.seg = seg; // 1단계에서 찍고 고친 관절을 그대로 쓴다
+  else initRig(seg);
   applyObjectTexture(gen.texture);
   renderQC(state.result);
   buildInspectObjects(state.result);
@@ -370,7 +435,8 @@ async function build(seg, label, makeDepth, onStep) {
     setStep("blueprint", "active");
     await pause(120);
     await startEditing(state.result);
-    setView("edit");
+    state.builtFor = state.inputVersion;
+    if (state.stage === "shape") setView("edit");
   }
   document.body.dataset.status = "ready";
 }
@@ -1005,7 +1071,7 @@ const HELP = {
 function setView(v) {
   if (v === "edit" && !state.edit) v = "world";
   if (v === "views" && !state.views) v = "world";
-  if (v === "rig" && !state.rig) v = "world";
+  if (v === "rig" && !state.rig && state.stage !== "draw") v = "world";
   state.view = v;
   $$(".vt").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
   $("#pad").hidden = v !== "world" || !player.ready;
@@ -1369,7 +1435,7 @@ let rigDrag = null;
 let rigHover = null;
 function initRig(seg) {
   const tid = chooseTemplate(seg.mask, seg.size);
-  state.rig = { templateId: tid, joints: {}, seg };
+  state.rig = { templateId: tid, joints: {}, seg, forInput: state.inputVersion, userEdited: false };
   if (tid !== "none") state.rig.joints[tid] = estimateJoints(seg.mask, seg.size, tid);
   rigCut = null;
   if (state.view === "rig") renderRig();
@@ -1428,7 +1494,14 @@ function rigLayout() {
 }
 function renderRig() {
   const r = state.rig;
-  if (!r || state.view !== "rig") return;
+  if (state.view !== "rig") return;
+  $("#rigEmpty").hidden = !!r;
+  $(".rigbar").style.visibility = r ? "" : "hidden";
+  if (!r) {
+    const cv = $("#rigCanvas");
+    cv.getContext("2d").clearRect(0, 0, cv.width, cv.height);
+    return;
+  }
   $$("#rigPane [data-tpl]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.tpl === r.templateId)));
   $("#rigAuto").disabled = r.templateId === "none";
   $("#rigHint").textContent = RIG_HINT[r.templateId];
@@ -1467,6 +1540,7 @@ function renderRig() {
     ctx.stroke();
   }
   ctx.font = "600 12px system-ui, sans-serif";
+  const placed = []; // 이름표가 겹치면 건너뛴다(점에 올리거나 끌면 보인다)
   for (const name of tpl.joints) {
     const [x, y] = L.toScreen(J[name]);
     const on = rigDrag?.name === name || rigHover === name;
@@ -1479,6 +1553,11 @@ function renderRig() {
     ctx.stroke();
     const side = /^(sL|eL|hL|hipL|kL|fL)$/.test(name) ? " (왼)" : /^(sR|eR|hR|hipR|kR|fR)$/.test(name) ? " (오)" : "";
     const text = tpl.labels[name] + side;
+    const w = ctx.measureText(text).width;
+    const box = [x + 10, y - 20, x + 14 + w, y - 4];
+    const hit = placed.some((p) => box[0] < p[2] && box[2] > p[0] && box[1] < p[3] && box[3] > p[1]);
+    if (hit && !on) continue;
+    placed.push(box);
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(255,253,248,.9)";
     ctx.strokeText(text, x + 10, y - 8);
@@ -1534,6 +1613,7 @@ const endRigDrag = (e) => {
   const moved = rigDrag.moved;
   rigDrag = null;
   e.currentTarget.classList.remove("dragging");
+  if (moved) state.rig.userEdited = true; // 직접 고친 관절은 그림을 더 그려도 유지한다
   renderRig();
   if (moved) rigChanged();
 };
@@ -1549,6 +1629,76 @@ $("#rigAuto").addEventListener("click", () => {
 });
 if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => state.view === "rig" && renderRig()).observe(viewport);
 window.__d2wRig = () => state.rig; // 테스트·디버그용
+
+// ---------------------------------------------------------------------------
+// 단계: 1 그리기·관절 → 2 3D 확인(6방향·메시) → 3 월드 미리보기 → 월드 입장
+// ---------------------------------------------------------------------------
+const STAGES = ["draw", "shape", "world"];
+/** 지금 입력(그린 그림·샘플·업로드)을 정하고, 분할해서 관절을 미리 찍는다. 3D 생성은 '다음'에서 */
+function setInput(data, label, { drawing = false } = {}) {
+  state.inputVersion++;
+  state.input = data ? { data, label, drawing } : null;
+  if (!data) {
+    if (!state.rig?.userEdited) state.rig = null;
+  } else {
+    try {
+      const seg = P.segment(data);
+      if (drawing && state.rig?.drawing && state.rig.userEdited) {
+        // 직접 고친 관절은 두고 그림(마스크)만 새로
+        state.rig.seg = seg;
+        state.rig.forInput = state.inputVersion;
+        rigCut = null;
+      } else {
+        initRig(seg);
+        state.rig.drawing = drawing;
+      }
+    } catch {
+      if (!state.rig?.userEdited) state.rig = null; // 아직 물체가 안 잡힘(빈 그림 등)
+    }
+  }
+  if (state.stage !== "draw") setStage("draw");
+  renderRig();
+  syncStage();
+}
+function setStage(st) {
+  state.stage = st;
+  document.body.dataset.stage = st;
+  document.body.classList.toggle("has-views", !!state.views);
+  $$(".stagechips li").forEach((li) => {
+    li.classList.toggle("on", li.dataset.stage === st);
+    li.classList.toggle("done", STAGES.indexOf(li.dataset.stage) < STAGES.indexOf(st));
+  });
+  if (st === "draw") setView("rig");
+  else if (st === "shape") setView(state.views && !state.edit ? "views" : "edit");
+  else setView("world");
+  syncStage();
+}
+function syncStage() {
+  const st = state.stage;
+  const prev = $("#stagePrev");
+  const next = $("#stageNext");
+  prev.hidden = st === "draw";
+  next.hidden = st === "world";
+  prev.textContent = st === "world" ? "← 3D 확인" : "← 그리기·관절";
+  next.textContent = st === "draw" ? "3D로 만들기 →" : "월드 미리보기 →";
+  next.disabled = state.busy || (st === "draw" ? !state.input?.data : !state.edit);
+}
+async function goShape() {
+  if (!state.input?.data) return showError("먼저 그림을 그리거나 샘플·파일을 고르세요.");
+  // 그림이 그대로면 다시 만들지 않는다(6방향에서 고친 내용 유지)
+  if (state.builtFor === state.inputVersion && (state.edit || state.views)) return setStage("shape");
+  setStage("shape");
+  await run(state.input.data, state.input.label);
+  if (document.body.dataset.status === "error") setStage("draw");
+  else setStage("shape");
+}
+function goWorld() {
+  if (!state.edit) return;
+  if (!state.edit.placed) placeInWorld();
+  setStage("world");
+}
+$("#stageNext").addEventListener("click", () => (state.stage === "draw" ? goShape() : goWorld()));
+$("#stagePrev").addEventListener("click", () => setStage(state.stage === "world" ? "shape" : "draw"));
 
 // ---------------------------------------------------------------------------
 // 월드 입장 (전체화면 월드 + 종목, pages/world/)
@@ -1962,22 +2112,10 @@ function loop() {
   if (state.view === "edit") renderEditPanels();
   else renderer.render(state.view === "world" ? worldScene : inspectScene, camera);
 }
-setView("world");
 loop();
 
 // ---------------------------------------------------------------------------
-// 시작: 자동차 샘플을 바로 변환해 월드에 띄운다
+// 시작: 1단계(그리기·관절)에서 기다린다. 그림을 그리거나 샘플을 고르면 오른쪽에 관절이 찍힌다
 // ---------------------------------------------------------------------------
-(async () => {
-  const first = SAMPLES[1];
-  selectSample(first.id);
-  try {
-    busy(true, "샘플 불러오는 중…");
-    const data = await loadSample(first);
-    await run(data, `샘플: ${first.name}`);
-  } catch (e) {
-    busy(false);
-    showError(`샘플을 불러오지 못했습니다: ${e.message}`);
-    document.body.dataset.status = "error";
-  }
-})();
+setStage("draw");
+document.body.dataset.status = "ready";

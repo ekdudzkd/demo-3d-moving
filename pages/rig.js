@@ -207,10 +207,14 @@ function humanJoints(mask, S, b) {
   };
   // 어깨: 목 조금 아래 줄의 몸통 구간 양쪽 안쪽
   const shY = neckY + 0.06 * H;
-  const sr = runAt(mask, S, shY + 0.02 * H, cx) || [cx - 0.15 * W, cx + 0.15 * W];
+  // 어깨 줄에는 옆으로 뻗은 팔이 붙어 있을 수 있어, 몸통 폭은 목과 골반 사이(팔 아래) 줄에서 잰다
+  const sr0 = runAt(mask, S, shY + 0.02 * H, cx) || [cx - 0.15 * W, cx + 0.15 * W];
+  const mr = runAt(mask, S, neckY + 0.5 * (hipY - neckY), cx);
+  const sr = mr && mr[1] - mr[0] < sr0[1] - sr0[0] ? [Math.max(sr0[0], mr[0]), Math.min(sr0[1], mr[1])] : sr0;
+  const scx = (sr[0] + sr[1]) / 2;
   const tw = sr[1] - sr[0];
-  const sL = [sr[0] + 0.16 * tw, shY];
-  const sR = [sr[1] - 0.16 * tw, shY];
+  const sL = [scx - 0.36 * tw, shY];
+  const sR = [scx + 0.36 * tw, shY];
   // 손: 어깨~가랑이 아래 띠에서 가장 왼쪽/오른쪽 전경점. 몸에 붙어 있으면 몸 옆 아래로
   let minX = S;
   let maxX = -1;
